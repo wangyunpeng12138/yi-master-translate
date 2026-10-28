@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 
 const version = ref(browser.runtime.getManifest().version);
 </script>
 
 <template>
-  <div class="popup-shell">
+  <el-config-provider :locale="zhCn">
+    <div class="popup-shell">
     <div class="popup-header">
       <span class="brand">沉浸式翻译（复刻版）</span>
       <el-tag size="small" type="info">v{{ version }}</el-tag>
@@ -20,7 +22,8 @@ const version = ref(browser.runtime.getManifest().version);
         打开设置页
       </el-button>
     </div>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <style scoped>

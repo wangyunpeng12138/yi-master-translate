@@ -16,6 +16,10 @@ export default defineContentScript({
       if (msg?.type === 'command' && msg.command) {
         console.log(`[imt-rebuild] content received command: ${msg.command} @ ${location.href}`);
       }
+      if (msg?.type === 'config:changed') {
+        // P3 起翻译引擎将在此热更新配置；P1 仅验证链路
+        console.log('[imt-rebuild] content received config:changed');
+      }
     });
     if (import.meta.env.DEV) {
       console.log('[imt-rebuild] guard ready @', location.host);

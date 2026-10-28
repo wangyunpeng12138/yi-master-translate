@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { SECTIONS } from './router';
 
 const route = useRoute();
-const active = () => `/${(route.params as Record<string, string>)?.path ?? 'general'}`;
 const version = browser.runtime.getManifest().version;
 </script>
 
 <template>
-  <el-container class="options-shell">
+  <el-config-provider :locale="zhCn">
+    <el-container class="options-shell">
     <el-aside width="220px" class="options-aside">
       <div class="brand">
         沉浸式翻译（复刻版）
@@ -24,6 +25,7 @@ const version = browser.runtime.getManifest().version;
       <router-view />
     </el-main>
   </el-container>
+  </el-config-provider>
 </template>
 
 <style scoped>

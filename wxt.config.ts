@@ -1,9 +1,19 @@
 import { defineConfig } from 'wxt';
+import AutoImport from 'unplugin-auto-import/vite';
+import Components from 'unplugin-vue-components/vite';
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-vue'],
+  vite: () => ({
+    plugins: [
+      // Element Plus 按需引入（P1 起，替代全量 987KB）
+      AutoImport({ resolvers: [ElementPlusResolver()], dts: false }),
+      Components({ resolvers: [ElementPlusResolver()], dts: false }),
+    ],
+  }),
   manifest: {
     name: '沉浸式翻译（复刻版）',
     short_name: '沉浸式翻译',

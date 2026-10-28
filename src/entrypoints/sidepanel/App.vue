@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 
 const tab = ref('text');
 </script>
 
 <template>
-  <div class="sidepanel-shell">
+  <el-config-provider :locale="zhCn">
+    <div class="sidepanel-shell">
     <el-tabs v-model="tab" class="sidepanel-tabs">
       <el-tab-pane label="文本" name="text">
         <el-empty description="文本翻译（P7 实现）" :image-size="60" />
@@ -23,7 +25,8 @@ const tab = ref('text');
         <el-empty description="内置使用教程（P7 实现）" :image-size="60" />
       </el-tab-pane>
     </el-tabs>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <style scoped>

@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import Placeholder from './pages/Placeholder.vue';
+import Preview from './pages/Preview.vue';
 
 /**
  * 设置页 hash 路由（对齐原版 options.html#<section> 直链习惯）
@@ -27,6 +28,8 @@ export const SECTIONS: Array<{ path: string; title: string; phase: string }> = [
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
+    // P1/P2 验收页（隐藏入口，直接访问 #preview）
+    { path: '/preview', component: Preview, meta: { title: '组件预览' } },
     ...SECTIONS.map((s) => ({
       path: `/${s.path}`,
       component: Placeholder,
