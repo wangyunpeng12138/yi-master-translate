@@ -1,0 +1,27 @@
+{
+  "name": "immersive-translate-rebuild",
+  "version": "0.1.0",
+  "description": "沉浸式翻译 Chrome 扩展复刻工程（MV3 + Vue3 + Element Plus + WXT）",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "element-plus": "^2.8.8",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@wxt-dev/module-vue": "^1.0.1",
+    "typescript": "^5.6.3",
+    "vue-tsc": "^2.1.10",
+    "wxt": "^0.20.0"
+  }
+}

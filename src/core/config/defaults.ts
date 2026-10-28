@@ -1,0 +1,257 @@
+import type {
+  CustomAiService,
+  DisplayMode,
+  FloatBallClickType,
+  ServiceId,
+  SiteTranslateMode,
+  TermLibrary,
+  TranslationPosition,
+} from '@/core/shared/types';
+
+/**
+ * 默认配置（三层合并的第 1 层）
+ * 键名迁移映射见 docs/实现方案.md 附录 A（原 default_config.json → 本工程）。
+ */
+
+export interface UserConfig {
+  /** 基本设置 */
+  general: {
+    targetLanguage: string; // 目标语言（原 translationService 之外的语言偏好）
+    interfaceLanguage: 'zh-CN' | 'en';
+    service: ServiceId; // 默认翻译服务（原 translationService: bing）
+    displayMode: DisplayMode; // 原 translationMode: dual
+    sameLangTheme: 'none' | 'background'; // 原 sameLangTranslationTheme
+    translationTheme: string; // 译文显示样式主题
+    translationPosition: TranslationPosition; // 原 translationPosition: after
+    forceNoneThemeUrls: string[]; // 强制「无」样式的域名
+  };
+  /** 引擎（原分散在 default_config 顶层的段落行为参数） */
+  engine: {
+    minParagraphChars: number; // 原「翻译段落所需的最少字符数」= 2
+    preTranslateChars: number; // 原 immediateTranslationTextCount = 4999
+    translateWholePage: boolean; // 是否翻译网页所有区域（默认智能识别主区域）
+    translateSidebar: boolean; // 原「启用侧边栏翻译」
+    translateTitle: boolean; // 原「开启翻译网页标题」
+    translateToPageEndImmediately: boolean; // 原「进入网页后立即翻译到页面底部」（不推荐）
+    sameLangCheck: boolean; // 原 sameLangCheck: true
+    loadingTheme: 'spinner' | 'text' | 'none'; // 原 loadingTheme: spinner
+    longParagraphWrap: boolean; // 长段落自动换行
+    autoTranslateInSite: boolean; // 站内页面自动翻译
+    tempAutoTranslateMinutes: number; // 原 tempTranslateDomainMinutes = 0
+    onlyTranslationLangs: string[]; // 仅译文模式的语言（原 translationModeLanguagePattern）
+    onlyTranslationUrls: string[]; // 仅译文模式的网址
+    translationStartMode: 'dynamic' | 'static'; // 原翻译启动模式
+  };
+  /** 输入框翻译 */
+  inputbox: {
+    enabled: boolean; // 原 enableInputTranslation: true
+    triggerKey: string; // 原 inputTrailingTriggerKey: 'space'
+    repeat: number; // 原 inputTrailingTriggerKeyRepeatTimes: 3
+    timeoutMs: number; // 原 inputTrailingTriggerKeyTimeout: 200
+    targetLanguage: string; // 原 inputTargetLanguage: 'en'
+    autoDetectChatLang: boolean; // 自动识别对话语言
+    autoDetectPageLang: boolean; // 自动识别页面语言
+    service: ServiceId; // 'inherit' 时跟随主服务
+  };
+  /** 划词翻译 */
+  selection: {
+    enabled: boolean;
+    circleSelectEnabled: boolean; // 圈选翻译
+    circleSelectKey: string; // 圈选快捷键 Z
+    triggerStyle: 'icon' | 'dot'; // 显示图标 / 小圆点
+    hoverConfirm: boolean; // 悬浮触发
+    autoSpeakWord: boolean; // 单词自动朗读
+    sameLangBehavior: 'translate' | 'skip'; // 目标语言与原语言相同时
+    blockUrls: string[];
+    service: ServiceId; // 划词专用服务（AI）
+  };
+  /** 鼠标悬停 */
+  hover: {
+    holdKey: string; // 悬停翻译触发键（空 = 不做任何事情）
+    keyTimeoutMs: number; // 原 mouseModifierKeyPressTimeout = 400
+    service: ServiceId;
+  };
+  /** 悬浮球 */
+  floatball: {
+    enabled: boolean; // 原 pcFloatBall.enable: true
+    hoverDelayMs: number; // 原 hoverSidePanelDelay = 500
+    transparency: number; // 原 transparency = 30
+    clickType: FloatBallClickType; // 原 clickType: translate
+    showSidePanelButton: boolean; // 侧边栏按钮显示方式
+    blockUrls: string[]; // 原 pcFloatBall.blockUrls
+  };
+  /** 视频字幕 */
+  subtitle: {
+    enabled: boolean;
+    autoEnableAll: boolean; // 自动开启（所有支持平台）
+    showPlayerShortcut: boolean; // 播放器快捷方式
+    youtubeAuto: boolean;
+    youtubePreferImt: boolean; // 优先用本扩展翻译字幕
+    meetingAuto: boolean; // Teams/Zoom/Meet
+    preferManualSubtitle: boolean; // 优先人工字幕
+    focusDialogue: boolean; // 滤除环境声标注
+    service: ServiceId; // 字幕专用服务（inherit）
+    displayMode: DisplayMode;
+    permanentDisable: boolean; // 永久禁用（冲突时）
+  };
+  /** 图片/漫画 */
+  image: {
+    hoverButtonEnabled: boolean; // 图片快捷翻译按钮
+    hoverButtonDelayMs: number; // 200
+    hoverTranslate: boolean; // 悬停触发图片翻译
+    provider: 'local' | 'custom'; // 免费本地 OCR / 自定义
+    mangaEnabled: boolean;
+    service: ServiceId; // clientImageTranslationService: inherit
+  };
+  /** 右键菜单与上下文 */
+  contextMenu: {
+    enabled: boolean; // 原 isShowContextMenu: true
+  };
+  /** 快捷键（扩展内记录层；浏览器级由 manifest commands 管理） */
+  shortcuts: Record<string, string>;
+  /** AI 专家 */
+  ai: {
+    enabled: boolean; // 原 enableAiAssistant: true
+    activeExpertId: string; // 'general'
+    experts: Array<{ id: string; name: string; prompt: string; builtin?: boolean }>;
+  };
+  /** 术语库 */
+  terms: {
+    showActiveHighlights: boolean; // 显示已生效术语
+    libraries: TermLibrary[];
+  };
+  /** 自定义服务 */
+  customServices: CustomAiService[];
+  /** 缓存 */
+  cache: {
+    enabled: boolean; // 开启本地翻译缓存
+  };
+  /** 开发者 */
+  developer: {
+    debugLog: boolean;
+    beta: boolean;
+    userRules: string; // JSON 文本（站点规则覆盖）
+    injectedCss: string;
+  };
+  /** 各站点独立设置（popup「当前网站翻译设置」） */
+  sites: Record<string, { translateMode?: SiteTranslateMode; forceWhole?: boolean }>;
+}
+
+export const DEFAULT_CONFIG: UserConfig = {
+  general: {
+    targetLanguage: 'zh-CN',
+    interfaceLanguage: 'zh-CN',
+    service: 'bing',
+    displayMode: 'dual',
+    sameLangTheme: 'background',
+    translationTheme: 'none',
+    translationPosition: 'after',
+    forceNoneThemeUrls: [],
+  },
+  engine: {
+    minParagraphChars: 2,
+    preTranslateChars: 4999,
+    translateWholePage: false,
+    translateSidebar: true,
+    translateTitle: true,
+    translateToPageEndImmediately: false,
+    sameLangCheck: true,
+    loadingTheme: 'spinner',
+    longParagraphWrap: false,
+    autoTranslateInSite: true,
+    tempAutoTranslateMinutes: 0,
+    onlyTranslationLangs: ['zh-TW'],
+    onlyTranslationUrls: [],
+    translationStartMode: 'dynamic',
+  },
+  inputbox: {
+    enabled: true,
+    triggerKey: 'space',
+    repeat: 3,
+    timeoutMs: 200,
+    targetLanguage: 'en',
+    autoDetectChatLang: true,
+    autoDetectPageLang: false,
+    service: 'inherit',
+  },
+  selection: {
+    enabled: true,
+    circleSelectEnabled: false,
+    circleSelectKey: 'z',
+    triggerStyle: 'icon',
+    hoverConfirm: true,
+    autoSpeakWord: false,
+    sameLangBehavior: 'translate',
+    blockUrls: [],
+    service: 'free-ai',
+  },
+  hover: {
+    holdKey: '',
+    keyTimeoutMs: 400,
+    service: 'inherit',
+  },
+  floatball: {
+    enabled: true,
+    hoverDelayMs: 500,
+    transparency: 30,
+    clickType: 'translate',
+    showSidePanelButton: false,
+    blockUrls: ['*localhost*/preview'],
+  },
+  subtitle: {
+    enabled: true,
+    autoEnableAll: true,
+    showPlayerShortcut: true,
+    youtubeAuto: true,
+    youtubePreferImt: true,
+    meetingAuto: true,
+    preferManualSubtitle: true,
+    focusDialogue: true,
+    service: 'inherit',
+    displayMode: 'dual',
+    permanentDisable: false,
+  },
+  image: {
+    hoverButtonEnabled: false,
+    hoverButtonDelayMs: 200,
+    hoverTranslate: true,
+    provider: 'local',
+    mangaEnabled: true,
+    service: 'inherit',
+  },
+  contextMenu: {
+    enabled: true,
+  },
+  shortcuts: {
+    toggleTranslatePage: 'Alt+A',
+    toggleTranslateTheWholePage: 'Alt+W',
+    toggleSidePanel: 'Alt+S',
+    translateInputBox: 'Alt+I',
+  },
+  ai: {
+    enabled: true,
+    activeExpertId: 'general',
+    experts: [
+      { id: 'general', name: '通用', builtin: true, prompt: '' },
+      { id: 'tech', name: '科技领域', builtin: true, prompt: 'You are a professional technology translator.' },
+      { id: 'paper', name: '学术论文', builtin: true, prompt: 'Use academic tone and precise terminology.' },
+      { id: 'legal', name: '法律文本', builtin: true, prompt: 'Use rigorous legal terminology.' },
+      { id: 'financial', name: '金融领域', builtin: true, prompt: 'Use standard financial terminology.' },
+    ],
+  },
+  terms: {
+    showActiveHighlights: true,
+    libraries: [],
+  },
+  customServices: [],
+  cache: {
+    enabled: true,
+  },
+  developer: {
+    debugLog: false,
+    beta: false,
+    userRules: '',
+    injectedCss: '',
+  },
+  sites: {},
+};
