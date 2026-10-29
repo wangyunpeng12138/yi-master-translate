@@ -13,7 +13,7 @@ import { ServiceError } from '../types';
 const DEFAULT_SYSTEM_PROMPT =
   'You are a professional translator. Translate the user text into {{to}} accurately and fluently. Keep the meaning, tone and formatting. Preserve code, placeholders and untranslated-proper nouns.{{expert}}{{terms}} Return ONLY the translated text without any explanation.';
 
-const DEFAULT_USER_PROMPT = 'Translate to {{to}}: {{text}}';
+const DEFAULT_USER_PROMPT = 'Translate to {{to}}:\n\n{{text}}'; // 注意两个换行，与原版逐字对齐（评审 2.2-12）
 
 const PRESETS: Record<string, { apiUrl: string; model: string }> = {
   'openai-custom': { apiUrl: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },

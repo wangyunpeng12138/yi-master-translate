@@ -18,8 +18,25 @@ export const BUILTIN_SERVICES: ServiceDefinition[] = [
     defaultMaxRps: 5,
   },
   {
+    // 原版免费变体（extends: bing）——同一实现双 id，导入原版配置时 bing-free 可解析（评审 3.2-⑤）
+    id: 'bing-free',
+    name: '微软翻译（免费）',
+    kind: 'machine',
+    builtin: true,
+    batchLimit: 50,
+    defaultMaxRps: 5,
+  },
+  {
     id: 'google',
     name: '谷歌翻译',
+    kind: 'machine',
+    builtin: true,
+    batchLimit: 10,
+    defaultMaxRps: 5,
+  },
+  {
+    id: 'google-free',
+    name: '谷歌翻译（免费）',
     kind: 'machine',
     builtin: true,
     batchLimit: 10,
@@ -77,8 +94,10 @@ export function getAdapter(config: UserConfig, serviceId: string): ServiceAdapte
   const id = serviceId === 'inherit' ? config.general.service : serviceId;
   switch (id) {
     case 'bing':
+    case 'bing-free': // 同一适配器双 id（评审 3.2-⑤）
       return bingAdapter();
     case 'google':
+    case 'google-free':
       return googleAdapter(config);
     case 'deeplx':
       return openaiCompatibleAdapter(config, 'deeplx');

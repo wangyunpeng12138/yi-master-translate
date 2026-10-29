@@ -67,7 +67,7 @@ export interface UserConfig {
   };
   /** 鼠标悬停 */
   hover: {
-    holdKey: string; // 悬停翻译触发键（空 = 不做任何事情）
+    holdKey: string; // 悬停翻译触发键；原版默认为字符串哨兵 "Off"（不做任何事情）
     keyTimeoutMs: number; // 原 mouseModifierKeyPressTimeout = 400
     service: ServiceId;
   };
@@ -96,12 +96,12 @@ export interface UserConfig {
   };
   /** 图片/漫画 */
   image: {
-    hoverButtonEnabled: boolean; // 图片快捷翻译按钮
+    hoverButtonEnabled: boolean; // 图片快捷翻译按钮（原 imageRule.enableTools）
     hoverButtonDelayMs: number; // 200
-    hoverTranslate: boolean; // 悬停触发图片翻译
-    provider: 'local' | 'custom'; // 免费本地 OCR / 自定义
+    hoverTranslate: boolean; // 悬停触发图片翻译（原 imageRule.enableMouseHover）
+    provider: 'local' | 'custom'; // 原 imageRule.imageTranslateProvider: "client"（本地 OCR，clientSupportLangs 16 语含日）
     mangaEnabled: boolean;
-    service: ServiceId; // clientImageTranslationService: inherit
+    service: ServiceId;
   };
   /** 右键菜单与上下文 */
   contextMenu: {
@@ -175,10 +175,10 @@ export const DEFAULT_CONFIG: UserConfig = {
     service: 'inherit',
   },
   selection: {
-    enabled: true,
+    enabled: false, // 原版配置默认 false（generalRule.selectionTranslation.enable，评审修正）
     circleSelectEnabled: false,
     circleSelectKey: 'z',
-    triggerStyle: 'icon',
+    triggerStyle: 'dot', // 原版默认 triggerMode: "mini"（显示小圆点，评审修正）
     hoverConfirm: true,
     autoSpeakWord: false,
     sameLangBehavior: 'translate',
@@ -186,7 +186,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     service: 'free-ai',
   },
   hover: {
-    holdKey: '',
+    holdKey: 'Off', // 原版默认字符串哨兵 "Off"（不做任何事情，评审修正）
     keyTimeoutMs: 400,
     service: 'inherit',
   },
@@ -240,7 +240,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     ],
   },
   terms: {
-    showActiveHighlights: true,
+    showActiveHighlights: false, // 原版配置默认 false（评审修正；UI 实测显示开为运行态/实验开关所致）
     libraries: [],
   },
   customServices: [],
