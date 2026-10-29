@@ -119,19 +119,23 @@ export default defineBackground(() => {
               cache,
               loadConfig: loadUserConfig,
               // 发起页面世代检查：页面导航/关闭后旧实例销毁，取消其排队批次（释放共享限流队列）。
-              // 同 tab 导航后新实例仍会应答 tab:check，但 epoch 不同 → 旧批次取消
+              // 同 tab 导航后新实例仍会应答 tab:check，但 epoch 不同 → 旧批次取消；
+              // 单次探测失败重试一次，防御消息总线偶发抖动误杀活页面
               isAlive:
                 sender?.tab?.id && req?.epoch
                   ? async () => {
-                      try {
-                        const r = (await browser.tabs.sendMessage(sender.tab!.id!, {
-                          type: 'tab:check',
-                          payload: { epoch: req.epoch },
-                        })) as { ok?: boolean };
-                        return r?.ok === true;
-                      } catch {
-                        return false;
-                      }
+                      const probe = async () => {
+                        try {
+                          const r = (await browser.tabs.sendMessage(sender.tab!.id!, {
+                            type: 'tab:check',
+                            payload: { epoch: req.epoch },
+                          })) as { ok?: boolean };
+                          return r?.ok === true;
+                        } catch {
+                          return false;
+                        }
+                      };
+                      return (await probe()) || (await probe());
                     }
                   : undefined,
             },

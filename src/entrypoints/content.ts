@@ -257,10 +257,16 @@ export default defineContentScript({
   main() {
   // 快捷键命令分发（background 转发）+ 页面世代探活应答
   browser.runtime.onMessage.addListener(
-    (msg: { type?: string; payload?: { command?: string; config?: UserConfig; srcUrl?: string; x?: number; y?: number; epoch?: string } }) => {
-      // background 批处理世代检查：同世代（同一页面实例）才应答，导航后的新实例不认旧批次
+    (
+      msg: { type?: string; payload?: { command?: string; config?: UserConfig; srcUrl?: string; x?: number; y?: number; epoch?: string } },
+      _sender: unknown,
+      sendResponse: (response: unknown) => void,
+    ) => {
+      // background 批处理世代检查：同世代（同一页面实例）才应答，导航后的新实例不认旧批次。
+      // 注意：原生 Chrome 消息协议同步返回普通对象会被忽略，必须 sendResponse + return true
       if (msg?.type === 'tab:check') {
-        return { ok: msg.payload?.epoch === PAGE_EPOCH };
+        sendResponse({ ok: msg.payload?.epoch === PAGE_EPOCH });
+        return true; // 保持消息通道直到 sendResponse 完成
       }
       if (msg?.type === 'command') {
         const command = msg.payload?.command ?? '';
