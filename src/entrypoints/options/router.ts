@@ -1,6 +1,26 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import Placeholder from './pages/Placeholder.vue';
 import Preview from './pages/Preview.vue';
+import General from './pages/General.vue';
+import Services from './pages/Services.vue';
+import Input from './pages/Input.vue';
+import Floating from './pages/Floating.vue';
+import Shortcuts from './pages/Shortcuts.vue';
+import Advanced from './pages/Advanced.vue';
+import ImportExport from './pages/ImportExport.vue';
+import About from './pages/About.vue';
+
+/** 分区 → 页面组件映射（P5 八区已实现，P6 剩余区待替换） */
+const PAGE_MAP: Record<string, unknown> = {
+  general: General,
+  services: Services,
+  input: Input,
+  floating: Floating,
+  shortcuts: Shortcuts,
+  advanced: Advanced,
+  import_export: ImportExport,
+  about: About,
+};
 
 /**
  * 设置页 hash 路由（对齐原版 options.html#<section> 直链习惯）
@@ -32,7 +52,7 @@ export const router = createRouter({
     { path: '/preview', component: Preview, meta: { title: '组件预览' } },
     ...SECTIONS.map((s) => ({
       path: `/${s.path}`,
-      component: Placeholder,
+      component: (PAGE_MAP[s.path] as never) ?? Placeholder,
       meta: { title: s.title, phase: s.phase },
     })),
     { path: '/:pathMatch(.*)*', redirect: '/general' },

@@ -14,6 +14,10 @@ import type {
  */
 
 export interface UserConfig {
+  /** 扩展总开关（原版关于页「启用扩展」） */
+  app: {
+    enabled: boolean;
+  };
   /** 基本设置 */
   general: {
     targetLanguage: string; // 目标语言（原 translationService 之外的语言偏好）
@@ -138,6 +142,9 @@ export interface UserConfig {
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
+  app: {
+    enabled: true,
+  },
   general: {
     targetLanguage: 'zh-CN',
     interfaceLanguage: 'zh-CN',

@@ -45,6 +45,9 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   if (translating) return;
   const c = await ensureConfig();
 
+  // 扩展总开关（原版关于页「启用扩展」）
+  if (!c.app.enabled) return;
+
   // 同语言检测
   const lang = pageLang();
   if (c.engine.sameLangCheck && lang && lang === targetLang(c)) {
