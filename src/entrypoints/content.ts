@@ -3,7 +3,7 @@ import { collectParagraphs, collectUntranslatedEls, WRAPPER_CLASS } from '@/engi
 import { isTranslated, showTranslation } from '@/engine/renderer';
 import { translateTexts, PAGE_EPOCH } from '@/engine/translator';
 import { isSameTargetLang, isTranslatable, normalizeText } from '@/core/shared/utils';
-import { mountFloatBall, setFloatBallState, unmountFloatBall } from '@/engine/floatball';
+import { mountFloatBall, setFloatBallStatus, unmountFloatBall } from '@/engine/floatball';
 import { initSelection, disposeSelection } from '@/engine/selection';
 import { initHover, disposeHover } from '@/engine/hover';
 import { initInputBox, disposeInputBox } from '@/engine/inputbox';
@@ -31,6 +31,7 @@ let pageTranslating = false;
 let lazyObserver: IntersectionObserver | null = null;
 const lazyPending = new Set<HTMLElement>();
 let lazyBusy = false;
+let lastError = false; // 最近一次主流程翻译是否失败（status:query 用）
 
 function stopLazyTranslate(): void {
   lazyObserver?.disconnect();
@@ -56,6 +57,11 @@ async function flushLazy(c: UserConfig): Promise<void> {
         targets.push(el);
       }
       if (texts.length === 0) continue;
+      // 懒翻译状态反馈：badge/悬浮球同步（滚动补翻时用户可见进度）
+      if (pageTranslating) {
+        setFloatBallStatus('translating');
+        reportStatus('translating');
+      }
       // 分小批逐批翻：单批失败只丢该批（一次消息通道失败不致整页懒翻译全废）
       const BATCH = 24; // 与 translator.CHUNK 对齐，每批恰好一条消息
       for (let i = 0; i < texts.length; i += BATCH) {
@@ -71,6 +77,10 @@ async function flushLazy(c: UserConfig): Promise<void> {
         } catch (e) {
           console.error(`[imt-rebuild] lazy translate failed (batch ${i / BATCH + 1}):`, e);
         }
+      }
+      if (pageTranslating) {
+        setFloatBallStatus('done');
+        reportStatus('done');
       }
     }
   } finally {
@@ -128,6 +138,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   // 判定不能用「本次 collect 到的段落是否全部已翻译」：walker 会跳过已译段落，
   // charBudget 截断/去重/懒加载残留都会使判定失真，把“关闭”误触发成补翻。
   if (document.querySelector(`.${WRAPPER_CLASS}`) || originalTitle !== null) {
+    lastError = false;
     document.querySelectorAll(`.${WRAPPER_CLASS}`).forEach((n) => n.remove());
     document.querySelectorAll('[data-imt-rebuild]').forEach((el) => {
       el.removeAttribute('data-imt-rebuild');
@@ -139,7 +150,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     }
     pageTranslating = false;
     stopLazyTranslate();
-    setFloatBallState(false);
+    setFloatBallStatus('idle');
     reportStatus('idle');
     return;
   }
@@ -157,7 +168,8 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   if (paragraphs.length === 0) return;
 
   translating = true;
-  setFloatBallState(true);
+  lastError = false;
+  setFloatBallStatus('translating');
   reportStatus('translating');
   try {
     const texts = paragraphs.map((p) => p.text);
@@ -169,13 +181,15 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     });
     if (c.engine.translateTitle) void translateTitle(c);
     reportStatus('done');
+    setFloatBallStatus('done');
     // 首屏完成后启动滚动增量：剩余段落进入视口前 800px 时自动补翻（边看边译）
     pageTranslating = true;
     startLazyTranslate(c);
   } catch (e) {
     console.error('[imt-rebuild] translate failed:', e);
+    lastError = true;
     reportStatus('error');
-    setFloatBallState(false);
+    setFloatBallStatus('error');
   } finally {
     translating = false;
   }
@@ -268,6 +282,18 @@ export default defineContentScript({
         sendResponse({ ok: msg.payload?.epoch === PAGE_EPOCH });
         return true; // 保持消息通道直到 sendResponse 完成
       }
+      // 状态直查（popup 打开时初始回显 / badge 刷新）：页面是状态权威源，不落存防 SW 生命周期丢失
+      if (msg?.type === 'status:query') {
+        const state = translating
+          ? 'translating'
+          : pageTranslating || document.querySelector(`.${WRAPPER_CLASS}`)
+            ? 'done'
+            : lastError
+              ? 'error'
+              : 'idle';
+        sendResponse({ state });
+        return true;
+      }
       if (msg?.type === 'command') {
         const command = msg.payload?.command ?? '';
         if (command === 'toggleTranslatePage') void togglePageTranslation();
@@ -295,6 +321,9 @@ export default defineContentScript({
     void ensureConfig().then((c) => {
       setupInteractions(c);
       mountBallWhenReady();
+      // 新页面实例声明 idle 状态：覆盖 background 的 per-tab 状态表
+      // （导航后旧状态清除；popup/badge 打开时能拿到正确初始状态）
+      reportStatus('idle');
     });
   },
 });

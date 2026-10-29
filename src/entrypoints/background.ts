@@ -40,6 +40,36 @@ async function getActiveTab(): Promise<{ id?: number } | null> {
   return tab ?? null;
 }
 
+/* ---------- 翻译状态展示：badge 跟随当前活动标签页（页面为权威源，直查不落存） ---------- */
+type TabStatus = 'idle' | 'translating' | 'done' | 'error';
+
+const BADGE: Record<TabStatus, { text: string; color: string }> = {
+  idle: { text: '', color: '#888888' },
+  translating: { text: '…', color: '#888888' },
+  done: { text: '✓', color: '#1e9e6a' },
+  error: { text: '×', color: '#f56c6c' },
+};
+
+async function applyBadge(status: TabStatus): Promise<void> {
+  const badge = BADGE[status] ?? BADGE.idle;
+  await browser.action.setBadgeText({ text: badge.text });
+  if (badge.text) {
+    await browser.action.setBadgeBackgroundColor({ color: badge.color });
+  }
+}
+
+/** 向活动标签页查询真实翻译状态并刷新 badge（切 tab 自动同步；无内容脚本的页面清空） */
+async function refreshBadge(): Promise<void> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id == null) return;
+  try {
+    const r = (await browser.tabs.sendMessage(tab.id, { type: 'status:query' })) as { state?: TabStatus };
+    await applyBadge(r?.state ?? 'idle');
+  } catch {
+    await applyBadge('idle');
+  }
+}
+
 /** 右键菜单注册（对齐原版 4 项基础菜单 ID） */
 async function setupContextMenus(): Promise<void> {
   const config = await loadUserConfig();
@@ -198,16 +228,34 @@ export default defineBackground(() => {
     }
   });
 
-  // 内容引擎状态事件 → badge（译中 … / 完成 ✓ / 失败 × / 空闲清除）
-  browser.runtime.onMessage.addListener((msg: { type?: string; payload?: { state?: string } }) => {
-    if (msg?.type !== 'translation:status') return;
-    const state = msg.payload?.state;
-    const badge = state === 'translating' ? '…' : state === 'done' ? '✓' : state === 'error' ? '×' : '';
-    void browser.action.setBadgeText({ text: badge });
-    void browser.action.setBadgeBackgroundColor({
-      color: state === 'error' ? '#f56c6c' : state === 'done' ? '#1e9e6a' : '#888888',
-    });
+  // 内容引擎状态事件 → 仅当来自当前活动标签页时刷新 badge（页面直查为准，不落存防 SW 生命周期丢失）。
+  // 注意：此处必须是普通函数——async 监听器对任何消息都会立即 resolve(Promise<undefined>)，
+  // 在 Chromium 多监听器竞争中抢答真正的请求处理监听器（switch），导致 config:get 等全部返回 null
+  browser.runtime.onMessage.addListener(
+    (
+      msg: { type?: string; payload?: { state?: TabStatus } },
+      sender: { tab?: { id?: number } },
+    ) => {
+      if (msg?.type !== 'translation:status') return; // undefined：不干扰其他监听器响应
+      const state = msg.payload?.state;
+      const senderTabId = sender?.tab?.id;
+      if (!state || senderTabId == null) return;
+      void (async () => {
+        try {
+          const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+          if (active?.id === senderTabId) await applyBadge(state);
+        } catch {
+          // badge 刷新失败静默
+        }
+      })();
+    },
+  );
+  // 切换标签页 → badge 跟随新页真实状态
+  browser.tabs.onActivated.addListener(() => {
+    void refreshBadge();
   });
+  // SW 冷启动 → 立即对齐活动页状态
+  void refreshBadge();
 
   // UI 直接写 storage 的场景（多窗口）：广播给内容脚本
   onUserConfigChanged(() => {

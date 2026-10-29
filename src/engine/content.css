@@ -40,6 +40,7 @@
 }
 
 .imt-rebuild-floatball {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -59,6 +60,40 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
-.imt-rebuild-floatball-active {
+/* 翻译完成（已开启双语） */
+.imt-rebuild-floatball-done {
   background: linear-gradient(135deg, #1e9e6a, #4fd1a5);
+}
+
+/* 翻译失败 */
+.imt-rebuild-floatball-error {
+  background: linear-gradient(135deg, #c45656, #f28b8b);
+}
+
+/* 翻译中：白色环旋转 + 呼吸 */
+.imt-rebuild-floatball-translating {
+  background: linear-gradient(135deg, #5470c6, #91a8e8);
+  animation: imt-rebuild-ball-pulse 1.2s ease-in-out infinite;
+}
+
+.imt-rebuild-floatball-translating::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: #fff;
+  animation: imt-rebuild-ball-spin 0.8s linear infinite;
+}
+
+@keyframes imt-rebuild-ball-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes imt-rebuild-ball-pulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+  50% { box-shadow: 0 2px 18px rgba(84, 112, 198, 0.55); }
 }

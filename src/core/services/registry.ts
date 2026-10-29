@@ -46,7 +46,7 @@ export const BUILTIN_SERVICES: ServiceDefinition[] = [
   {
     // 腾讯 TranSmart 免费通道（原版 transmart-free 同源；国内可直连，微软/谷歌域不可达环境的可靠备选）
     id: 'transmart',
-    name: '腾讯 TranSmart（免费）',
+    name: '腾讯 TranSmart',
     kind: 'machine',
     builtin: true,
     batchLimit: 1,

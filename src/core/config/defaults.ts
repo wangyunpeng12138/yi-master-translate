@@ -115,7 +115,8 @@ export interface UserConfig {
   shortcuts: Record<string, string>;
   /** AI 专家 */
   ai: {
-    enabled: boolean; // 原 enableAiAssistant: true
+    enabled: boolean; // 原 enableAiAssistant；默认关闭：免费机器通道用不到专家提示词，
+    //    且未配置自定义 AI 服务时开启无实际效果（评审后对齐用户直觉）
     activeExpertId: string; // 'general'
     experts: Array<{ id: string; name: string; prompt: string; builtin?: boolean }>;
   };
@@ -244,7 +245,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     translateInputBox: 'Alt+I',
   },
   ai: {
-    enabled: true,
+    enabled: false,
     activeExpertId: 'general',
     experts: [
       { id: 'general', name: '通用', builtin: true, prompt: '' },

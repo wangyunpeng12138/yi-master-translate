@@ -14,10 +14,11 @@ import MoreMenu from './MoreMenu.vue';
 const store = useConfigStore();
 const version = browser.runtime.getManifest().version;
 const moreOpen = ref(false);
-const translating = ref(false);
 const pageStatus = ref<'idle' | 'translating' | 'done' | 'error'>('idle');
+const currentTabId = ref<number | null>(null);
 
 const experts = computed(() => store.config.ai.experts);
+const hasCustomAi = computed(() => store.config.customServices.length > 0);
 
 const statusText = computed(() =>
   pageStatus.value === 'translating'
@@ -25,31 +26,52 @@ const statusText = computed(() =>
     : pageStatus.value === 'done'
       ? '已翻译，再次点击可切回原文'
       : pageStatus.value === 'error'
-        ? '翻译失败'
-        : '',
+        ? '翻译失败，可重试'
+        : '未翻译',
+);
+
+const btnText = computed(() =>
+  pageStatus.value === 'done' ? '显示原文 (Alt+A)' : '翻译 (Alt+A)',
 );
 
 onMounted(async () => {
   await store.load();
-  // 状态回显（与 background badge 同源事件）
-  browser.runtime.onMessage.addListener((msg: { type?: string; payload?: { state?: typeof pageStatus.value } }) => {
-    if (msg?.type === 'translation:status') pageStatus.value = msg.payload?.state ?? 'idle';
-  });
+  // 当前活动页：仅该页的状态更新本 popup；状态直接向页面 content script 查询
+  //（页面为权威源，导航/切 tab 后重新打开自动回显正确状态，不受 SW 生命周期影响）
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  currentTabId.value = tab?.id ?? null;
+  if (tab?.id != null) {
+    try {
+      const r = (await browser.tabs.sendMessage(tab.id, { type: 'status:query' })) as {
+        state?: typeof pageStatus.value;
+      };
+      pageStatus.value = r?.state ?? 'idle';
+    } catch {
+      pageStatus.value = 'idle'; // 无内容脚本的页面（chrome:// 等）
+    }
+  }
+  browser.runtime.onMessage.addListener(
+    (
+      msg: { type?: string; payload?: { state?: typeof pageStatus.value } },
+      sender: { tab?: { id?: number } },
+    ) => {
+      if (msg?.type !== 'translation:status') return;
+      if (sender?.tab?.id != null && sender.tab.id !== currentTabId.value) return; // 其他页面的状态不串台
+      pageStatus.value = msg.payload?.state ?? 'idle';
+    },
+  );
 });
 
 async function toggleTranslate() {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return;
-  translating.value = true;
+  const tabId = currentTabId.value;
+  if (tabId == null) return;
   try {
-    await browser.tabs.sendMessage(tab.id, {
+    await browser.tabs.sendMessage(tabId, {
       type: 'command',
       payload: { command: 'toggleTranslatePage' },
     });
   } catch {
     pageStatus.value = 'error';
-  } finally {
-    translating.value = false;
   }
 }
 
@@ -95,21 +117,27 @@ function openOptions(hash: string) {
         </el-select>
       </div>
 
-      <!-- AI 精翻 -->
-      <div class="ai-row">
-        <span>启用 AI 精翻</span>
+      <!-- AI 精翻（无自定义 AI 服务时无实际效果，禁用并提示） -->
+      <div class="ai-row" :title="hasCustomAi ? '' : '需先在「翻译服务」添加自定义 AI 服务（API Key）'">
+        <span :class="{ 'ai-label-disabled': !hasCustomAi }">启用 AI 精翻</span>
         <el-switch
           size="small"
-          :model-value="store.config.ai.enabled"
+          :model-value="hasCustomAi ? store.config.ai.enabled : false"
+          :disabled="!hasCustomAi"
           @update:model-value="store.patch({ ai: { enabled: $event } })"
         />
       </div>
 
-      <!-- 翻译主按钮 -->
-      <el-button type="primary" class="translate-btn" :loading="translating" @click="toggleTranslate">
-        翻译 (Alt+A)
+      <!-- 翻译主按钮：状态跟随页面（翻译中 loading / 已翻译变切回） -->
+      <el-button
+        type="primary"
+        class="translate-btn"
+        :loading="pageStatus === 'translating'"
+        @click="toggleTranslate"
+      >
+        {{ btnText }}
       </el-button>
-      <div v-if="statusText" class="status-line">{{ statusText }}</div>
+      <div class="status-line" :class="'status-' + pageStatus">{{ statusText }}</div>
 
       <!-- 快捷入口 -->
       <div class="quick-row">
@@ -196,6 +224,10 @@ function openOptions(hash: string) {
   color: var(--el-text-color-secondary);
   margin-top: 6px;
 }
+.status-translating { color: #5470c6; }
+.status-done { color: #1e9e6a; }
+.status-error { color: var(--el-color-danger); }
+.ai-label-disabled { color: var(--el-text-color-placeholder); }
 .quick-row {
   display: flex;
   justify-content: space-around;

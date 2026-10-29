@@ -22,6 +22,7 @@ const showInherit = computed(() => props.allowInherit);
   <el-select
     :model-value="modelValue"
     style="width: 220px"
+    popper-class="imt-rebuild-svc-popper"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <el-option v-if="showInherit" value="inherit" label="跟随全局翻译服务" />
@@ -40,3 +41,11 @@ const showInherit = computed(() => props.allowInherit);
     </el-option>
   </el-select>
 </template>
+
+<style>
+/* 服务下拉在 popup 等小视口中会被浏览器窗口底部裁剪 → 限制最大高度内部滚动 */
+.el-select__popper.imt-rebuild-svc-popper .el-select-dropdown__list {
+  max-height: 208px;
+  overflow-y: auto;
+}
+</style>

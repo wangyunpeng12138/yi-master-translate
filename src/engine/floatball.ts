@@ -38,8 +38,26 @@ export function unmountFloatBall(): void {
   document.querySelectorAll(`.${FLOATBALL_HOST_CLASS}`).forEach((n) => n.remove());
 }
 
-export function setFloatBallState(active: boolean): void {
+/** 悬浮球状态类名后缀 */
+export type FloatBallStatus = 'idle' | 'translating' | 'done' | 'error';
+
+const STATUS_CLASSES: Record<FloatBallStatus, string> = {
+  idle: '',
+  translating: 'imt-rebuild-floatball-translating',
+  done: 'imt-rebuild-floatball-done',
+  error: 'imt-rebuild-floatball-error',
+};
+
+/** 悬浮球三态可视反馈：未翻译（默认）/ 翻译中（转圈）/ 完成（绿色）/ 失败（红色） */
+export function setFloatBallStatus(status: FloatBallStatus): void {
   document.querySelectorAll('.imt-rebuild-floatball').forEach((n) => {
-    n.classList.toggle('imt-rebuild-floatball-active', active);
+    n.classList.remove(
+      'imt-rebuild-floatball-translating',
+      'imt-rebuild-floatball-done',
+      'imt-rebuild-floatball-error',
+      'imt-rebuild-floatball-active', // 兼容旧类清理
+    );
+    const cls = STATUS_CLASSES[status];
+    if (cls) n.classList.add(cls);
   });
 }
