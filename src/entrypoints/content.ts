@@ -32,6 +32,57 @@ let lazyObserver: IntersectionObserver | null = null;
 const lazyPending = new Set<HTMLElement>();
 let lazyBusy = false;
 let lastError = false; // 最近一次主流程翻译是否失败（status:query 用）
+let cancelRequested = false; // 翻译中再点悬浮球 = 终止（已翻内容保留，后续批次停止）
+
+/* ---------- 段落 AI 搜索（术语解释） ---------- */
+const EXPLAIN_BTN_CLASS = 'imt-rebuild-explain-btn';
+const EXPLAIN_BOX_CLASS = 'imt-rebuild-explain-box';
+
+/** 译文渲染后挂 AI 搜索按钮（附着段落末尾；explain.enabled 控制） */
+function attachExplainButton(el: HTMLElement, originalText: string, c: UserConfig): void {
+  if (!c.explain.enabled) return;
+  if (el.querySelector(`:scope > .${EXPLAIN_BTN_CLASS}`)) return;
+  const btn = document.createElement('span');
+  btn.className = EXPLAIN_BTN_CLASS;
+  btn.title = 'AI 搜索：解释本段术语/典故（缓存命中直接返回）';
+  btn.textContent = '🔍';
+  btn.dataset.text = originalText;
+  el.appendChild(btn);
+}
+
+async function handleExplainClick(btn: HTMLElement): Promise<void> {
+  const el = btn.parentElement;
+  const text = btn.dataset.text ?? '';
+  if (!el || !text) return;
+  // 已有结果框 → 再点收起
+  const exist = el.querySelector(`:scope > .${EXPLAIN_BOX_CLASS}`);
+  if (exist) {
+    exist.remove();
+    return;
+  }
+  const box = document.createElement('div');
+  box.className = EXPLAIN_BOX_CLASS;
+  box.textContent = '🔍 AI 搜索中…';
+  el.appendChild(box);
+  try {
+    const r = (await browser.runtime.sendMessage({
+      type: 'explain:paragraph',
+      payload: { text },
+    })) as { content?: string; generatedAt?: number; cached?: boolean };
+    if (!r?.content) throw new Error('AI 未返回内容');
+    const time = r.generatedAt ? new Date(r.generatedAt).toLocaleString('zh-CN') : '';
+    const head = document.createElement('div');
+    head.className = 'imt-rebuild-explain-meta';
+    head.textContent = `术语解释（${r.cached ? '缓存' : 'AI 生成'} · ${time}）`;
+    const body = document.createElement('div');
+    body.className = 'imt-rebuild-explain-content';
+    body.textContent = r.content;
+    box.textContent = '';
+    box.append(head, body);
+  } catch (e) {
+    box.textContent = `🔍 AI 搜索失败：${e instanceof Error ? e.message : String(e)}`;
+  }
+}
 
 function stopLazyTranslate(): void {
   lazyObserver?.disconnect();
@@ -43,7 +94,7 @@ async function flushLazy(c: UserConfig): Promise<void> {
   if (lazyBusy) return;
   lazyBusy = true;
   try {
-    while (pageTranslating && lazyPending.size > 0) {
+    while (pageTranslating && !cancelRequested && lazyPending.size > 0) {
       const els = [...lazyPending];
       lazyPending.clear();
       const texts: string[] = [];
@@ -65,7 +116,7 @@ async function flushLazy(c: UserConfig): Promise<void> {
       // 分小批逐批翻：单批失败只丢该批（一次消息通道失败不致整页懒翻译全废）
       const BATCH = 24; // 与 translator.CHUNK 对齐，每批恰好一条消息
       for (let i = 0; i < texts.length; i += BATCH) {
-        if (!pageTranslating) break; // 中途被 restore
+        if (!pageTranslating || cancelRequested) break; // 中途被 restore / 终止
         const slice = texts.slice(i, i + BATCH);
         const targetSlice = targets.slice(i, i + BATCH);
         targetSlice.forEach((el) => showLoading(el, c)); // 立即反馈
@@ -73,8 +124,12 @@ async function flushLazy(c: UserConfig): Promise<void> {
           const results = await translateTexts(slice, 'auto', c.general.targetLanguage, c.general.service, 'page');
           targetSlice.forEach((el, j) => {
             const translated = results[j] ?? '';
-            if (translated && translated !== slice[j]) showTranslation(el, translated, c);
-            else removeLoadingInline(el);
+            if (translated && translated !== slice[j]) {
+              showTranslation(el, translated, c);
+              attachExplainButton(el, slice[j], c); // 懒翻译段同样挂 AI 搜索按钮
+            } else {
+              removeLoadingInline(el);
+            }
           });
         } catch (e) {
           targetSlice.forEach((el) => removeLoadingInline(el));
@@ -132,7 +187,15 @@ function targetLang(c: UserConfig): string {
 }
 
 async function togglePageTranslation(wholePage = false): Promise<void> {
-  if (translating) return;
+  // 翻译中再点悬浮球 = 终止翻译（已翻内容保留，后续批次停止；清除 loading 立即反馈）
+  if (translating || lazyBusy) {
+    cancelRequested = true;
+    document.querySelectorAll('.imt-rebuild-loading').forEach((n) => n.remove());
+    const hasResult = !!document.querySelector(`.${WRAPPER_CLASS}`);
+    setFloatBallStatus(hasResult ? 'done' : 'idle');
+    reportStatus(hasResult ? 'done' : 'idle');
+    return;
+  }
   const c = await ensureConfig();
 
   if (!c.app.enabled) return;
@@ -142,7 +205,9 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   // charBudget 截断/去重/懒加载残留都会使判定失真，把“关闭”误触发成补翻。
   if (document.querySelector(`.${WRAPPER_CLASS}`) || originalTitle !== null) {
     lastError = false;
+    cancelRequested = false;
     document.querySelectorAll(`.${WRAPPER_CLASS}`).forEach((n) => n.remove());
+    document.querySelectorAll('.' + EXPLAIN_BTN_CLASS + ', .' + EXPLAIN_BOX_CLASS).forEach((n) => n.remove());
     document.querySelectorAll('[data-imt-rebuild]').forEach((el) => {
       el.removeAttribute('data-imt-rebuild');
       el.classList.remove('imt-rebuild-only-mode');
@@ -173,6 +238,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
 
   translating = true;
   lastError = false;
+  cancelRequested = false; // 新一轮翻译开始，清除旧的中断信号
   setFloatBallStatus('translating');
   reportStatus('translating');
   try {
@@ -182,6 +248,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     // 分小批渐进渲染：每批完成立即插入译文（免费通道缓存快、AI 逐段慢都能渐进出结果）
     const BATCH = 8;
     for (let i = 0; i < paragraphs.length; i += BATCH) {
+      if (cancelRequested) break; // 用户终止
       if (!translationNotInterrupted()) break; // 中途被 restore
       const slice = paragraphs.slice(i, i + BATCH);
       const texts = slice.map((p) => p.text);
@@ -190,8 +257,12 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
         // 「译文==原文」不插 wrapper：纯数字/目录编号等无需翻译段，以及服务原样返回的段
         slice.forEach((p, j) => {
           const translated = results[j] ?? '';
-          if (translated && translated !== texts[j]) showTranslation(p.el, translated, c);
-          else removeLoadingInline(p.el); // 无译文段也要清 loading
+          if (translated && translated !== texts[j]) {
+            showTranslation(p.el, translated, c);
+            attachExplainButton(p.el, texts[j], c); // 译文后挂 AI 搜索按钮
+          } else {
+            removeLoadingInline(p.el); // 无译文段也要清 loading
+          }
         });
       } catch (e) {
         // 本批失败：清 loading 并继续后续批（部分成功优于全废）
@@ -199,6 +270,13 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
         console.error(`[imt-rebuild] translate failed (batch ${i / BATCH + 1}):`, e);
         lastError = true;
       }
+    }
+    if (cancelRequested) {
+      // 终止：已翻内容保留，状态按是否有译文回退（loading 已在 cancel 时清理）
+      const hasResult = !!document.querySelector(`.${WRAPPER_CLASS}`);
+      reportStatus(hasResult ? 'done' : 'idle');
+      setFloatBallStatus(hasResult ? 'done' : 'idle');
+      return;
     }
     if (c.engine.translateTitle) void translateTitle(c);
     reportStatus(lastError ? 'error' : 'done');
@@ -353,6 +431,15 @@ export default defineContentScript({
     void ensureConfig().then((c) => {
       setupInteractions(c);
       mountBallWhenReady();
+      // AI 搜索按钮事件委托（document 级一次绑定，段落渲染后即时可点）
+      document.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement)?.closest?.('.' + EXPLAIN_BTN_CLASS);
+        if (btn) {
+          e.preventDefault();
+          e.stopPropagation();
+          void handleExplainClick(btn as HTMLElement);
+        }
+      });
       // 新页面实例声明 idle 状态：覆盖 background 的 per-tab 状态表
       // （导航后旧状态清除；popup/badge 打开时能拿到正确初始状态）
       reportStatus('idle');

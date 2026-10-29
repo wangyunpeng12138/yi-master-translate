@@ -111,6 +111,12 @@ export interface UserConfig {
   contextMenu: {
     enabled: boolean; // 原 isShowContextMenu: true
   };
+  /** AI 搜索（段落术语解释：与翻译服务分离，必须 AI 服务才能解释术语） */
+  explain: {
+    enabled: boolean; // 译文后显示 AI 搜索按钮
+    service: ServiceId; // AI 搜索专用服务（inherit = 跟随翻译服务；机翻无解释能力，建议选 AI 服务）
+    cacheDays: number; // 解释缓存天数（0 = 不缓存）
+  };
   /** 快捷键（扩展内记录层；浏览器级由 manifest commands 管理） */
   shortcuts: Record<string, string>;
   /** AI 专家 */
@@ -239,6 +245,11 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   contextMenu: {
     enabled: true,
+  },
+  explain: {
+    enabled: true,
+    service: 'inherit',
+    cacheDays: 30,
   },
   shortcuts: {
     toggleTranslatePage: 'Alt+A',

@@ -22,6 +22,8 @@ export interface AdapterOptions {
   expertPrompt?: string;
   /** 用户全局追加提示词（ai.promptAppend，注入 system 末尾；仅 AI 服务生效） */
   promptAppend?: string;
+  /** 整体替换默认翻译系统提示词（AI 搜索/术语解释等非翻译场景用） */
+  systemOverride?: string;
   /** 温度等自定义服务参数 */
   temperature?: number;
   /** signal 用于取消 */

@@ -8,6 +8,7 @@ import Floating from './pages/Floating.vue';
 import Shortcuts from './pages/Shortcuts.vue';
 import Advanced from './pages/Advanced.vue';
 import Network from './pages/Network.vue';
+import Explain from './pages/Explain.vue';
 import ImportExport from './pages/ImportExport.vue';
 import About from './pages/About.vue';
 import Ai from './pages/Ai.vue';
@@ -28,6 +29,7 @@ const PAGE_MAP: Record<string, unknown> = {
   shortcuts: Shortcuts,
   advanced: Advanced,
   network: Network,
+  explain: Explain,
   import_export: ImportExport,
   about: About,
   ai: Ai,
@@ -59,6 +61,7 @@ export const SECTIONS: Array<{ path: string; title: string; phase: string }> = [
   { path: 'shortcuts', title: '快捷键', phase: 'P5' },
   { path: 'advanced', title: '进阶设置', phase: 'P5' },
   { path: 'network', title: '网络代理', phase: 'P9' },
+  { path: 'explain', title: 'AI 搜索', phase: 'P9' },
   { path: 'import_export', title: '导入/导出', phase: 'P5' },
   { path: 'about', title: '关于', phase: 'P5' },
   { path: 'developer', title: '开发者设置', phase: 'P6' },

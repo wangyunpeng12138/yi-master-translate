@@ -87,11 +87,15 @@ async function translateOne(
           .map((t) => `${t.from} => ${t.to}`)
           .join('; ')}.`
       : '';
-  const systemPrompt = fill(ep.systemPrompt || DEFAULT_SYSTEM_PROMPT, {
-    to,
-    expert: opts?.expertPrompt ? `\n${opts.expertPrompt}` : '',
-    terms: termsBlock,
-  });
+  // 非翻译场景（AI 搜索/术语解释）：systemOverride 整体替换默认翻译系统提示词，
+  // 避免默认「翻译并只返回译文」指令与解释指令冲突
+  const systemPrompt = opts?.systemOverride
+    ? fill(opts.systemOverride, { to, text: '' })
+    : fill(ep.systemPrompt || DEFAULT_SYSTEM_PROMPT, {
+        to,
+        expert: opts?.expertPrompt ? `\n${opts.expertPrompt}` : '',
+        terms: termsBlock,
+      });
   // 用户全局追加提示词：注入 system 末尾（领域定制，与专家提示词叠加；构造后追加
   // 以保证对用户完全自定义 systemPrompt 的服务也生效）
   const finalSystem = opts?.promptAppend ? `${systemPrompt}\n${opts.promptAppend}` : systemPrompt;

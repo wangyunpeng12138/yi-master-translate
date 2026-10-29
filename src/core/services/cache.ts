@@ -9,6 +9,8 @@ import { fnv1a, normalizeText } from '@/core/shared/utils';
 export interface CacheArea {
   get(keys?: string[] | null): Promise<Record<string, string>>;
   set(entries: Record<string, string>): Promise<void>;
+  /** 可选：批量删除（清除缓存用；browser.storage.local 原生支持） */
+  remove?(keys: string[]): Promise<void>;
 }
 
 export class TranslateCache {

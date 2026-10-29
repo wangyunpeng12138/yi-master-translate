@@ -31,7 +31,11 @@ const statusText = computed(() =>
 );
 
 const btnText = computed(() =>
-  pageStatus.value === 'done' ? '显示原文 (Alt+A)' : '翻译 (Alt+A)',
+  pageStatus.value === 'translating'
+    ? '停止翻译 (Alt+A)'
+    : pageStatus.value === 'done'
+      ? '显示原文 (Alt+A)'
+      : '翻译 (Alt+A)',
 );
 
 onMounted(async () => {

@@ -6,6 +6,7 @@ import { TranslateCache } from '@/core/services/cache';
 import { translateBatch } from '@/core/services/aiBatch';
 import { getAdapter } from '@/core/services/registry';
 import { applyProxySettings, applyLocalServiceDnr } from '@/core/services/proxy';
+import { buildExplainExport, clearExplainCache, explainParagraph } from '@/core/services/explain';
 import type { TranslateRequest } from '@/core/shared/types';
 
 /**
@@ -24,6 +25,20 @@ const cache = new TranslateCache({
     await browser.storage.local.set(entries);
   },
 });
+
+/** storage.local 直接作为 CacheArea（explain 缓存读写/导出/清除共用） */
+const storageArea = {
+  get: async (keys?: string[] | null) => {
+    const stored = await browser.storage.local.get(keys as string[] | null);
+    return stored as Record<string, string>;
+  },
+  set: async (entries: Record<string, string>) => {
+    await browser.storage.local.set(entries);
+  },
+  remove: async (keys: string[]) => {
+    await browser.storage.local.remove(keys);
+  },
+};
 
 async function broadcastConfig(): Promise<void> {
   const config = await loadUserConfig();
@@ -173,6 +188,28 @@ export default defineBackground(() => {
           );
           return { texts };
         })();
+      case 'explain:paragraph': {
+        // 段落术语解释（AI 搜索）：缓存命中直接返回，否则调 AI 并写缓存
+        return (async () => {
+          const text = (msg.payload as { text?: string })?.text;
+          if (!text) throw new Error('explain:paragraph 缺少 text');
+          const result = await explainParagraph({ loadConfig: loadUserConfig, area: storageArea }, text);
+          return result;
+        })();
+      }
+      case 'explain:export': {
+        // 导出全部术语解释为 txt 文本
+        return (async () => {
+          const { text, count } = await buildExplainExport(storageArea);
+          return { text, count };
+        })();
+      }
+      case 'explain:clear': {
+        return (async () => {
+          const removed = await clearExplainCache(storageArea);
+          return { removed };
+        })();
+      }
       case 'cache:query': {
         return (async () => {
           const keys = ((msg.payload as { keys?: string[] })?.keys ?? []) as string[];
