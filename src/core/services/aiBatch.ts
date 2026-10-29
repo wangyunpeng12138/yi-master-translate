@@ -39,7 +39,8 @@ export async function translateBatch(
   req: TranslateRequest,
 ): Promise<string[]> {
   const config = await deps.loadConfig();
-  const adapter = withRateLimit(getAdapter(config, req.service), new RateLimiter(5));
+  const serviceId = req.service === 'inherit' ? config.general.service : req.service;
+  const adapter = withRateLimit(getAdapter(config, serviceId), new RateLimiter(5));
   const opts = buildAdapterOptions(config, req.scope);
 
   // 1. 过滤 + 规范化
@@ -69,11 +70,26 @@ export async function translateBatch(
     }
   });
 
-  // 3. 分块请求（缓存未命中部分）
+  // 3. 分块请求（缓存未命中部分），免费机器通道失败时自动降级互备（评审 3.3-7）
+  const FREE_FALLBACK: Record<string, string> = {
+    bing: 'google',
+    'bing-free': 'google-free',
+    google: 'bing',
+    'google-free': 'bing-free',
+  };
   const newEntries: Record<string, string> = {};
   for (const batch of chunk(pending, adapter.batchLimit)) {
     const batchTexts = batch.map((p) => p.text);
-    const out = await adapter.translate(batchTexts, req.from, req.to, opts);
+    let out: string[];
+    try {
+      out = await adapter.translate(batchTexts, req.from, req.to, opts);
+    } catch (e) {
+      const fallbackId = FREE_FALLBACK[serviceId];
+      if (!fallbackId) throw e; // 自定义/AI 服务不降级
+      console.warn(`[imt-rebuild] ${serviceId} 失败，降级到 ${fallbackId}：`, e);
+      const fb = withRateLimit(getAdapter(config, fallbackId), new RateLimiter(5));
+      out = await fb.translate(batchTexts, req.from, req.to, opts);
+    }
     out.forEach((translated, j) => {
       const item = batch[j];
       results[item.idx] = translated;
