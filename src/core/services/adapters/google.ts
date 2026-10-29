@@ -1,6 +1,7 @@
 import type { UserConfig } from '@/core/config/defaults';
 import type { AdapterOptions, ServiceAdapter } from '../types';
 import { ServiceError } from '../types';
+import { withTimeout } from '../queue';
 
 /**
  * 谷歌翻译免费接口（对齐原版 google-free）
@@ -9,6 +10,9 @@ import { ServiceError } from '../types';
  */
 
 const ENDPOINT = 'https://translate.googleapis.com/translate_a/single';
+
+/** 免费通道默认超时（不可达网络下提前失败，降级链更快切备选） */
+const FETCH_TIMEOUT_MS = 8000;
 
 interface GoogleResponse {
   0?: Array<Array<[string, string]>>;
@@ -28,7 +32,9 @@ async function translateOne(
     dt: 't',
     q: text,
   });
-  const res = await fetch(`${ENDPOINT}?${params.toString()}`, { signal: opts?.signal });
+  const res = await fetch(`${ENDPOINT}?${params.toString()}`, {
+    signal: withTimeout(opts?.signal, FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) {
     throw new ServiceError(`translate failed: HTTP ${res.status}`, 'http');
   }

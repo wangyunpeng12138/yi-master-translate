@@ -1,6 +1,6 @@
 import type { UserConfig } from '@/core/config/defaults';
-import { collectParagraphs } from '@/engine/walker';
-import { isTranslated, restoreTranslation, showTranslation } from '@/engine/renderer';
+import { collectParagraphs, WRAPPER_CLASS } from '@/engine/walker';
+import { showTranslation } from '@/engine/renderer';
 import { translateTexts } from '@/engine/translator';
 import { mountFloatBall, setFloatBallState, unmountFloatBall } from '@/engine/floatball';
 import { initSelection, disposeSelection } from '@/engine/selection';
@@ -22,6 +22,8 @@ import '@/engine/content.css';
 let config: UserConfig | null = null;
 let translating = false;
 let injectedStyleEl: HTMLStyleElement | null = null;
+/** 翻译前的原始 title（restore 时还原；防止二次翻译把已译标题再翻，污染原文） */
+let originalTitle: string | null = null;
 
 function reportStatus(state: 'idle' | 'translating' | 'done' | 'error'): void {
   void browser.runtime
@@ -49,7 +51,25 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
 
   if (!c.app.enabled) return;
 
-  // 同语言检测
+  // 页面存在任一已译 wrapper → 还原（原版语义：再按一次切回原文）。
+  // 判定不能用「本次 collect 到的段落是否全部已翻译」：walker 会跳过已译段落，
+  // charBudget 截断/去重/懒加载残留都会使判定失真，把“关闭”误触发成补翻。
+  if (document.querySelector(`.${WRAPPER_CLASS}`) || originalTitle !== null) {
+    document.querySelectorAll(`.${WRAPPER_CLASS}`).forEach((n) => n.remove());
+    document.querySelectorAll('[data-imt-rebuild]').forEach((el) => {
+      el.removeAttribute('data-imt-rebuild');
+      el.classList.remove('imt-rebuild-only-mode');
+    });
+    if (originalTitle !== null) {
+      document.title = originalTitle;
+      originalTitle = null;
+    }
+    setFloatBallState(false);
+    reportStatus('idle');
+    return;
+  }
+
+  // 同语言检测（仅翻译分支；已翻译页面上的关闭操作不受此拦截）
   const lang = pageLang();
   if (c.engine.sameLangCheck && lang && lang === targetLang(c)) {
     console.info('[imt-rebuild] 页面语言与目标语言相同，跳过翻译');
@@ -60,15 +80,6 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     charBudget: wholePage || c.engine.translateWholePage ? 1_000_000 : undefined,
   });
   if (paragraphs.length === 0) return;
-
-  // 已全部翻译 → 还原
-  const translatedCount = paragraphs.filter((p) => isTranslated(p.el)).length;
-  if (translatedCount === paragraphs.length) {
-    paragraphs.forEach((p) => restoreTranslation(p.el));
-    setFloatBallState(false);
-    reportStatus('idle');
-    return;
-  }
 
   translating = true;
   setFloatBallState(true);
@@ -91,6 +102,8 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
 async function translateTitle(c: UserConfig): Promise<void> {
   const title = document.title;
   if (!title) return;
+  // 首次覆盖前留存原文（restore 分支恢复）
+  if (originalTitle === null) originalTitle = title;
   const out = await translateTexts([title], 'auto', c.general.targetLanguage, c.general.service, 'page');
   if (out[0]) document.title = out[0];
 }

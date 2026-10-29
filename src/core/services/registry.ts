@@ -2,6 +2,7 @@ import type { UserConfig } from '@/core/config/defaults';
 import type { ServiceDefinition, ServiceAdapter } from './types';
 import { bingAdapter } from './adapters/bing';
 import { googleAdapter } from './adapters/google';
+import { transmartAdapter } from './adapters/transmart';
 import { openaiCompatibleAdapter } from './adapters/openai-compatible';
 
 /**
@@ -41,6 +42,15 @@ export const BUILTIN_SERVICES: ServiceDefinition[] = [
     builtin: true,
     batchLimit: 10,
     defaultMaxRps: 5,
+  },
+  {
+    // 腾讯 TranSmart 免费通道（原版 transmart-free 同源；国内可直连，微软/谷歌域不可达环境的可靠备选）
+    id: 'transmart',
+    name: '腾讯 TranSmart（免费）',
+    kind: 'machine',
+    builtin: true,
+    batchLimit: 1,
+    defaultMaxRps: 3,
   },
   {
     id: 'openai-custom',
@@ -99,6 +109,9 @@ export function getAdapter(config: UserConfig, serviceId: string): ServiceAdapte
     case 'google':
     case 'google-free':
       return googleAdapter(config);
+    case 'transmart':
+    case 'transmart-free':
+      return transmartAdapter();
     case 'deeplx':
       return openaiCompatibleAdapter(config, 'deeplx');
     case 'openai-custom':

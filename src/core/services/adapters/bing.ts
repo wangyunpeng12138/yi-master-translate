@@ -1,5 +1,6 @@
 import type { ServiceAdapter } from '../types';
 import { ServiceError } from '../types';
+import { withTimeout } from '../queue';
 
 /**
  * 微软翻译免费通道（对齐原版 bing-free 实测协议，2026-10-29 逆向修正）
@@ -11,6 +12,9 @@ import { ServiceError } from '../types';
  */
 
 const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext';
+
+/** 免费通道默认超时：不可达网络下浏览器层要挂 ~10s，8s 提前失败让降级链更快切备选 */
+const FETCH_TIMEOUT_MS = 8000;
 
 /** 原版 langMap（zh-CN → Edge 翻译语言码）全表 */
 const LANG_MAP = new Map<string, string>([
@@ -59,7 +63,7 @@ export function bingAdapter(): ServiceAdapter {
         },
         body: JSON.stringify(texts),
         credentials: 'omit',
-        signal: opts?.signal,
+        signal: withTimeout(opts?.signal, FETCH_TIMEOUT_MS),
       });
       if (!res.ok) {
         throw new ServiceError(`bing HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`, 'http');

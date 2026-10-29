@@ -110,10 +110,14 @@ export default defineBackground(() => {
           return { ok: true as const };
         })();
       case 'translate:batch':
-        return translateBatch(
-          { cache, loadConfig: loadUserConfig },
-          msg.payload as TranslateRequest,
-        );
+        // 协议约定返回 TranslateResult = { texts: string[] }（P2 遗留 bug 修复：此前返回裸数组）
+        return (async () => {
+          const texts = await translateBatch(
+            { cache, loadConfig: loadUserConfig },
+            msg.payload as TranslateRequest,
+          );
+          return { texts };
+        })();
       case 'cache:query': {
         return (async () => {
           const keys = ((msg.payload as { keys?: string[] })?.keys ?? []) as string[];

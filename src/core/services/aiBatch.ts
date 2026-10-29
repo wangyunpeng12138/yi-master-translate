@@ -40,7 +40,9 @@ export async function translateBatch(
 ): Promise<string[]> {
   const config = await deps.loadConfig();
   const serviceId = req.service === 'inherit' ? config.general.service : req.service;
-  const adapter = withRateLimit(getAdapter(config, serviceId), new RateLimiter(5));
+  const base = getAdapter(config, serviceId);
+  // 限流取适配器自身 maxRps（transmart 限 3rps 遵守腾讯接口限制；原写死 5 会触发对方限流再绕道降级）
+  const adapter = withRateLimit(base, new RateLimiter(base.maxRps));
   const opts = buildAdapterOptions(config, req.scope);
 
   // 1. 过滤 + 规范化
@@ -71,11 +73,14 @@ export async function translateBatch(
   });
 
   // 3. 分块请求（缓存未命中部分），免费机器通道失败时自动降级互备（评审 3.3-7）
+  //    降级优先级：微软域不可达场景优先切腾讯 TranSmart（国内可直连）
   const FREE_FALLBACK: Record<string, string> = {
-    bing: 'google',
-    'bing-free': 'google-free',
-    google: 'bing',
-    'google-free': 'bing-free',
+    bing: 'transmart',
+    'bing-free': 'transmart',
+    transmart: 'bing',
+    'transmart-free': 'bing',
+    google: 'transmart',
+    'google-free': 'transmart',
   };
   const newEntries: Record<string, string> = {};
   for (const batch of chunk(pending, adapter.batchLimit)) {
@@ -87,7 +92,8 @@ export async function translateBatch(
       const fallbackId = FREE_FALLBACK[serviceId];
       if (!fallbackId) throw e; // 自定义/AI 服务不降级
       console.warn(`[imt-rebuild] ${serviceId} 失败，降级到 ${fallbackId}：`, e);
-      const fb = withRateLimit(getAdapter(config, fallbackId), new RateLimiter(5));
+      const fbAdapter = getAdapter(config, fallbackId);
+      const fb = withRateLimit(fbAdapter, new RateLimiter(fbAdapter.maxRps));
       out = await fb.translate(batchTexts, req.from, req.to, opts);
     }
     out.forEach((translated, j) => {

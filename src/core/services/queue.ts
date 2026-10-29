@@ -57,5 +57,32 @@ export function chunk<T>(texts: T[], limit: number): T[][] {
   return out;
 }
 
+/**
+ * 组合外部 signal 与默认超时的 AbortSignal
+ * 场景：免费通道端点不可达时浏览器层要挂 ~10s 才报错，加默认超时让降级链更快切备选。
+ * - 外部 signal 已中止：立即中止；未中止：转发其中止
+ * - ms 毫秒后超时中止（DOMException TimeoutError）
+ */
+export function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), ms);
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timer);
+      ctrl.abort(signal.reason);
+    } else {
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          ctrl.abort(signal.reason);
+        },
+        { once: true },
+      );
+    }
+  }
+  return ctrl.signal;
+}
+
 // 兼容旧导出名（段落切块）
 export const chunkTexts = chunk;
