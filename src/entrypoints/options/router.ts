@@ -9,6 +9,14 @@ import Shortcuts from './pages/Shortcuts.vue';
 import Advanced from './pages/Advanced.vue';
 import ImportExport from './pages/ImportExport.vue';
 import About from './pages/About.vue';
+import Ai from './pages/Ai.vue';
+import Terms from './pages/Terms.vue';
+import Writing from './pages/Writing.vue';
+import Subtitle from './pages/Subtitle.vue';
+import Manga from './pages/Manga.vue';
+import Selection from './pages/Selection.vue';
+import MouseHover from './pages/MouseHover.vue';
+import Developer from './pages/Developer.vue';
 
 /** 分区 → 页面组件映射（P5 八区已实现，P6 剩余区待替换） */
 const PAGE_MAP: Record<string, unknown> = {
@@ -20,6 +28,14 @@ const PAGE_MAP: Record<string, unknown> = {
   advanced: Advanced,
   import_export: ImportExport,
   about: About,
+  ai: Ai,
+  terms: Terms,
+  writing: Writing,
+  subtitle: Subtitle,
+  manga: Manga,
+  selection_translation: Selection,
+  mouse_hover: MouseHover,
+  developer: Developer,
 };
 
 /**
