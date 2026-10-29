@@ -13,6 +13,9 @@ import { chunk, RateLimiter, withRateLimit } from './queue';
 export interface BatchDeps {
   cache: TranslateCache;
   loadConfig: () => Promise<UserConfig>;
+  /** 发起页面存活检查（每批前调用）：tab 已关闭/导航则取消剩余批次，
+   *  避免已离开页面的积压批次长时间占用共享限流队列，阻塞新页面首屏翻译 */
+  isAlive?: () => Promise<boolean>;
 }
 
 /**
@@ -111,6 +114,10 @@ export async function translateBatch(
   };
   const newEntries: Record<string, string> = {};
   for (const batch of chunk(pending, adapter.batchLimit)) {
+    // 页面已关闭 → 取消剩余批次（限流槽位立即释放，不阻塞后续页面）
+    if (deps.isAlive && !(await deps.isAlive())) {
+      throw new Error('translate canceled: origin tab closed');
+    }
     const batchTexts = batch.map((p) => p.text);
     let out: string[];
     try {

@@ -1,8 +1,8 @@
 import type { UserConfig } from '@/core/config/defaults';
 import { collectParagraphs, collectUntranslatedEls, WRAPPER_CLASS } from '@/engine/walker';
 import { isTranslated, showTranslation } from '@/engine/renderer';
-import { translateTexts } from '@/engine/translator';
-import { isTranslatable, normalizeText } from '@/core/shared/utils';
+import { translateTexts, PAGE_EPOCH } from '@/engine/translator';
+import { isSameTargetLang, isTranslatable, normalizeText } from '@/core/shared/utils';
 import { mountFloatBall, setFloatBallState, unmountFloatBall } from '@/engine/floatball';
 import { initSelection, disposeSelection } from '@/engine/selection';
 import { initHover, disposeHover } from '@/engine/hover';
@@ -184,6 +184,8 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
 async function translateTitle(c: UserConfig): Promise<void> {
   const title = document.title;
   if (!title) return;
+  // 中文标题（目标语言段落）不翻：避免反向互译污染
+  if (isSameTargetLang(title, c.general.targetLanguage)) return;
   // 首次覆盖前留存原文（restore 分支恢复）
   if (originalTitle === null) originalTitle = title;
   const out = await translateTexts([title], 'auto', c.general.targetLanguage, c.general.service, 'page');
@@ -253,32 +255,36 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_start',
   main() {
-    // 快捷键命令分发（background 转发）
-    browser.runtime.onMessage.addListener(
-      (msg: { type?: string; payload?: { command?: string; config?: UserConfig; srcUrl?: string; x?: number; y?: number } }) => {
-        if (msg?.type === 'command') {
-          const command = msg.payload?.command ?? '';
-          if (command === 'toggleTranslatePage') void togglePageTranslation();
-          else if (command === 'toggleTranslateTheWholePage') void togglePageTranslation(true);
+  // 快捷键命令分发（background 转发）+ 页面世代探活应答
+  browser.runtime.onMessage.addListener(
+    (msg: { type?: string; payload?: { command?: string; config?: UserConfig; srcUrl?: string; x?: number; y?: number; epoch?: string } }) => {
+      // background 批处理世代检查：同世代（同一页面实例）才应答，导航后的新实例不认旧批次
+      if (msg?.type === 'tab:check') {
+        return { ok: msg.payload?.epoch === PAGE_EPOCH };
+      }
+      if (msg?.type === 'command') {
+        const command = msg.payload?.command ?? '';
+        if (command === 'toggleTranslatePage') void togglePageTranslation();
+        else if (command === 'toggleTranslateTheWholePage') void togglePageTranslation(true);
+      }
+      if (msg?.type === 'config:changed') {
+        config = msg.payload?.config ?? config;
+        if (config) {
+          // 热更新：悬浮球 + 交互层
+          if (!config.floatball.enabled) unmountFloatBall();
+          else void mountBallOnce();
+          setupInteractions(config);
+          // 翻译中收到新配置：懒翻译观察器重启，新段落用新配置（目标语言/服务）
+          if (pageTranslating) startLazyTranslate(config);
         }
-        if (msg?.type === 'config:changed') {
-          config = msg.payload?.config ?? config;
-          if (config) {
-            // 热更新：悬浮球 + 交互层
-            if (!config.floatball.enabled) unmountFloatBall();
-            else void mountBallOnce();
-            setupInteractions(config);
-            // 翻译中收到新配置：懒翻译观察器重启，新段落用新配置（目标语言/服务）
-            if (pageTranslating) startLazyTranslate(config);
-          }
-        }
-        if (msg?.type === 'translateImage' && msg.payload?.srcUrl) {
-          void ensureConfig().then((c) =>
-            translateImage(msg.payload!.srcUrl as string, msg.payload?.x ?? 120, msg.payload?.y ?? 120, c),
-          );
-        }
-      },
-    );
+      }
+      if (msg?.type === 'translateImage' && msg.payload?.srcUrl) {
+        void ensureConfig().then((c) =>
+          translateImage(msg.payload!.srcUrl as string, msg.payload?.x ?? 120, msg.payload?.y ?? 120, c),
+        );
+      }
+    },
+  );
 
     void ensureConfig().then((c) => {
       setupInteractions(c);

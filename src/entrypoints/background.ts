@@ -97,7 +97,7 @@ export default defineBackground(() => {
   });
 
   // 请求-响应消息处理
-  browser.runtime.onMessage.addListener((raw: unknown) => {
+  browser.runtime.onMessage.addListener((raw: unknown, sender: { tab?: { id?: number } }) => {
     const msg = raw as { type?: string; payload?: unknown };
     if (!msg || typeof msg.type !== 'string') return;
 
@@ -113,9 +113,29 @@ export default defineBackground(() => {
       case 'translate:batch':
         // 协议约定返回 TranslateResult = { texts: string[] }（P2 遗留 bug 修复：此前返回裸数组）
         return (async () => {
+          const req = msg.payload as TranslateRequest;
           const texts = await translateBatch(
-            { cache, loadConfig: loadUserConfig },
-            msg.payload as TranslateRequest,
+            {
+              cache,
+              loadConfig: loadUserConfig,
+              // 发起页面世代检查：页面导航/关闭后旧实例销毁，取消其排队批次（释放共享限流队列）。
+              // 同 tab 导航后新实例仍会应答 tab:check，但 epoch 不同 → 旧批次取消
+              isAlive:
+                sender?.tab?.id && req?.epoch
+                  ? async () => {
+                      try {
+                        const r = (await browser.tabs.sendMessage(sender.tab!.id!, {
+                          type: 'tab:check',
+                          payload: { epoch: req.epoch },
+                        })) as { ok?: boolean };
+                        return r?.ok === true;
+                      } catch {
+                        return false;
+                      }
+                    }
+                  : undefined,
+            },
+            req,
           );
           return { texts };
         })();

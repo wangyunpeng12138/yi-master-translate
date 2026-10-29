@@ -18,6 +18,9 @@ export interface TranslateRequest {
   to: LangCode;
   service: ServiceId;
   scope: TranslateScope;
+  /** 发起页 content script 实例标识（世代）：页面导航后旧实例销毁，
+   *  background 据此取消已离开页面仍在排队的批次（共享限流队列积压问题） */
+  epoch?: string;
 }
 
 /** 翻译结果（与 texts 等长对齐） */

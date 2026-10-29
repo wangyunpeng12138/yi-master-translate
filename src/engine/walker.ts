@@ -1,4 +1,4 @@
-import { isTranslatable, normalizeText } from '@/core/shared/utils';
+import { isSameTargetLang, isTranslatable, normalizeText } from '@/core/shared/utils';
 import type { UserConfig } from '@/core/config/defaults';
 
 /**
@@ -71,6 +71,9 @@ export function collectParagraphs(config: UserConfig, opts: WalkOptions = {}): P
     const raw = el.innerText ?? el.textContent ?? '';
     const text = normalizeText(raw);
     if (!isTranslatable(text, minChars)) continue;
+    // 段落语言与目标语言相同 → 跳过（中英混排页只翻外文，对齐原版；
+    // 同时避免中文段落被服务端检测后反向互译成外语）
+    if (isSameTargetLang(text, config.general.targetLanguage)) continue;
 
     total += text.length;
     out.push({ el, text });
@@ -92,7 +95,10 @@ export function collectUntranslatedEls(config: UserConfig): HTMLElement[] {
     if (el.querySelector(`.${WRAPPER_CLASS}`)) continue; // 已翻译
     if (hasNestedBlock(el)) continue; // 只取最内层
     const raw = el.innerText ?? el.textContent ?? '';
-    if (!isTranslatable(normalizeText(raw), minChars)) continue;
+    const text = normalizeText(raw);
+    if (!isTranslatable(text, minChars)) continue;
+    // 同 collectParagraphs：目标语言段落不收集（懒翻译同语义）
+    if (isSameTargetLang(text, config.general.targetLanguage)) continue;
     out.push(el);
   }
   return out;
