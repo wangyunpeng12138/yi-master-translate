@@ -35,6 +35,7 @@ export default defineConfig({
       'contextMenus',
       'sidePanel',
       'offscreen',
+      'proxy',
       'declarativeNetRequest',
       'declarativeNetRequestWithHostAccess',
     ],

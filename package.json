@@ -20,6 +20,7 @@
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.7",
     "@wxt-dev/module-vue": "^1.0.1",
     "typescript": "^5.6.3",
     "unplugin-auto-import": "^21.1.0",

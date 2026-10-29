@@ -27,6 +27,9 @@ importers:
         specifier: ^4.4.5
         version: 4.6.4(vue@3.5.44(typescript@5.9.3))
     devDependencies:
+      '@types/chrome':
+        specifier: ^0.3.7
+        version: 0.3.7
       '@wxt-dev/module-vue':
         specifier: ^1.0.1
         version: 1.0.3(vite@8.3.5(@types/node@26.6.5)(esbuild@0.27.7)(jiti@2.7.0))(vue@3.5.44(typescript@5.9.3))(wxt@0.20.27(@types/node@26.6.5)(jiti@2.7.0)(rolldown@1.2.15))
@@ -414,6 +417,9 @@ packages:
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
+
+  '@types/chrome@0.3.7':
+    resolution: {integrity: sha512-jWZgbHqWbTL1a5+PoyN0OJutNyejWgyZ5MdcvKo6iJE1TNRtXR3FxsC4WzNl52yZWPidfWC8NV/VUNZf+OFKcA==}
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
@@ -2358,6 +2364,10 @@ snapshots:
     dependencies:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
+
+  '@types/chrome@0.3.7':
+    dependencies:
+      '@types/har-format': 1.2.16
 
   '@types/deep-eql@4.0.2': {}
 

@@ -58,9 +58,9 @@ async function translateOne(text: string, from: string, to: string, signal?: Abo
   if (data.errCode !== 0 || data.errMsg) {
     throw new ServiceError(`transmart errCode ${data.errCode}: ${data.errMsg ?? ''}`, 'parse');
   }
-  if (!data.targetText) {
-    throw new ServiceError('transmart empty targetText', 'parse');
-  }
+  // 腾讯对目录编号/控制符类文本会返回空译文：原样返回原文，
+  // 由 content 端「译文==原文」过滤决定不插 wrapper（视同无需翻译）
+  if (!data.targetText) return text;
   return data.targetText;
 }
 

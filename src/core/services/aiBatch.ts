@@ -15,6 +15,29 @@ export interface BatchDeps {
   loadConfig: () => Promise<UserConfig>;
 }
 
+/**
+ * 按服务共享限流器（模块级）：并发消息各自 new RateLimiter 会使实际 rps 翻倍
+ * （首屏尾部块与滚动懒翻译首批并发时曾达 6rps，触发腾讯限流），必须全局每服务一个。
+ */
+const rateLimiters = new Map<string, RateLimiter>();
+function getLimiter(serviceId: string, maxRps: number): RateLimiter {
+  let limiter = rateLimiters.get(serviceId);
+  if (!limiter || limiter.maxRps !== maxRps) {
+    limiter = new RateLimiter(maxRps);
+    rateLimiters.set(serviceId, limiter);
+  }
+  return limiter;
+}
+
+/** 统一包装为 Error：DOMException（fetch 超时/abort）不是 Error 实例，
+ *  直接从 onMessage 监听器 Promise reject 会触发 Chrome 通用诊断
+ *  「A runtime.onMessage listener's promise rejected without an Error」，顶掉真实错误信息 */
+function toError(e: unknown): Error {
+  if (e instanceof Error) return e;
+  if (e instanceof DOMException) return new Error(`DOMException: ${e.name}: ${e.message}`);
+  return new Error(String((e as { message?: string })?.message ?? e));
+}
+
 /** 从配置展开生效术语与专家提示词 */
 export function buildAdapterOptions(config: UserConfig, scope: string) {
   const terms = config.terms.libraries
@@ -41,8 +64,8 @@ export async function translateBatch(
   const config = await deps.loadConfig();
   const serviceId = req.service === 'inherit' ? config.general.service : req.service;
   const base = getAdapter(config, serviceId);
-  // 限流取适配器自身 maxRps（transmart 限 3rps 遵守腾讯接口限制；原写死 5 会触发对方限流再绕道降级）
-  const adapter = withRateLimit(base, new RateLimiter(base.maxRps));
+  // 限流取适配器自身 maxRps 且按服务共享（transmart 限 3rps 遵守腾讯接口限制）
+  const adapter = withRateLimit(base, getLimiter(serviceId, base.maxRps));
   const opts = buildAdapterOptions(config, req.scope);
 
   // 1. 过滤 + 规范化
@@ -60,17 +83,21 @@ export async function translateBatch(
     }
   });
 
-  // 2. 缓存命中
+  // 2. 缓存命中；同批相同文本只请求一次，结果展开回填所有位置（walker 不再做文本去重，
+  //    重复段落每个元素都要 wrapper，但出网必须合并，避免重复段落重复计费/限流）
   const keys = missTexts.map((t) => TranslateCache.key(req.service, req.from, req.to, t));
-  const hits = await deps.cache.query(keys);
-  const pending: Array<{ idx: number; text: string; key: string }> = [];
+  const hits = await deps.cache.query([...new Set(keys)]);
+  const missMap = new Map<string, { text: string; idxs: number[] }>();
   keys.forEach((key, k) => {
     if (key in hits) {
       results[indexes[k]] = hits[key];
     } else {
-      pending.push({ idx: indexes[k], text: missTexts[k], key });
+      const entry = missMap.get(key);
+      if (entry) entry.idxs.push(indexes[k]);
+      else missMap.set(key, { text: missTexts[k], idxs: [indexes[k]] });
     }
   });
+  const pending = [...missMap.entries()].map(([key, v]) => ({ key, text: v.text, idxs: v.idxs }));
 
   // 3. 分块请求（缓存未命中部分），免费机器通道失败时自动降级互备（评审 3.3-7）
   //    降级优先级：微软域不可达场景优先切腾讯 TranSmart（国内可直连）
@@ -90,15 +117,24 @@ export async function translateBatch(
       out = await adapter.translate(batchTexts, req.from, req.to, opts);
     } catch (e) {
       const fallbackId = FREE_FALLBACK[serviceId];
-      if (!fallbackId) throw e; // 自定义/AI 服务不降级
+      // 自定义/AI 服务不降级；统一包装 Error（DOMException 非 Error 实例，直接 reject 会
+      // 触发 Chrome 通用诊断顶掉真实错误）
+      if (!fallbackId) throw toError(e);
       console.warn(`[imt-rebuild] ${serviceId} 失败，降级到 ${fallbackId}：`, e);
       const fbAdapter = getAdapter(config, fallbackId);
-      const fb = withRateLimit(fbAdapter, new RateLimiter(fbAdapter.maxRps));
-      out = await fb.translate(batchTexts, req.from, req.to, opts);
+      const fb = withRateLimit(fbAdapter, getLimiter(fallbackId, fbAdapter.maxRps));
+      try {
+        out = await fb.translate(batchTexts, req.from, req.to, opts);
+      } catch {
+        // 降级也失败：抛首次的原始错误（保留首选服务失败语义），且包装为 Error
+        throw toError(e);
+      }
     }
     out.forEach((translated, j) => {
       const item = batch[j];
-      results[item.idx] = translated;
+      item.idxs.forEach((idx) => {
+        results[idx] = translated;
+      });
       newEntries[item.key] = translated;
     });
   }

@@ -130,6 +130,14 @@ export interface UserConfig {
   cache: {
     enabled: boolean; // 开启本地翻译缓存
   };
+  /** 网络代理（本复刻版新增能力：翻译接口经本地代理转发，应对直连不可达环境） */
+  network: {
+    proxyEnabled: boolean; // 开启后接管浏览器代理：命中 proxyDomains 的请求走代理，其余直连
+    proxyHost: string;
+    proxyPort: number;
+    proxyType: 'http' | 'socks5';
+    proxyDomains: string[]; // 走代理的域名（内置免费通道域；自定义 AI 服务域名自动并入）
+  };
   /** 开发者 */
   developer: {
     debugLog: boolean;
@@ -253,6 +261,18 @@ export const DEFAULT_CONFIG: UserConfig = {
   customServices: [],
   cache: {
     enabled: true,
+  },
+  network: {
+    proxyEnabled: false,
+    proxyHost: '127.0.0.1',
+    proxyPort: 7890,
+    proxyType: 'http',
+    proxyDomains: [
+      'translate.googleapis.com',
+      'translate.google.com',
+      'edge.microsoft.com',
+      'wxapp.translator.qq.com',
+    ],
   },
   developer: {
     debugLog: false,

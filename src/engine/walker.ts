@@ -37,22 +37,27 @@ export interface Paragraph {
   text: string; // 规范化文本
 }
 
+/** 主区域选择（优先级：main > article > #content > .content > body） */
+function findMainRoot(): HTMLElement {
+  return (
+    (document.querySelector('main') as HTMLElement) ??
+    (document.querySelector('article') as HTMLElement) ??
+    (document.querySelector('#content') as HTMLElement) ??
+    (document.querySelector('.content') as HTMLElement) ??
+    document.body
+  );
+}
+
 /**
- * 收集主区域待翻译段落。
+ * 收集主区域待翻译段落（首屏预翻译用）。
  * 主区域优先级：main > article > #content > .content > body
  */
 export function collectParagraphs(config: UserConfig, opts: WalkOptions = {}): Paragraph[] {
   const charBudget = opts.charBudget ?? config.engine.preTranslateChars;
   const minChars = config.engine.minParagraphChars;
-  const root =
-    (document.querySelector('main') as HTMLElement) ??
-    (document.querySelector('article') as HTMLElement) ??
-    (document.querySelector('#content') as HTMLElement) ??
-    (document.querySelector('.content') as HTMLElement) ??
-    document.body;
+  const root = findMainRoot();
 
   const out: Paragraph[] = [];
-  const seen = new Set<string>();
   let total = 0;
 
   const candidates = root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR);
@@ -66,11 +71,29 @@ export function collectParagraphs(config: UserConfig, opts: WalkOptions = {}): P
     const raw = el.innerText ?? el.textContent ?? '';
     const text = normalizeText(raw);
     if (!isTranslatable(text, minChars)) continue;
-    if (seen.has(text)) continue; // 去重（模板化 DOM 常见）
-    seen.add(text);
 
     total += text.length;
     out.push({ el, text });
+  }
+  return out;
+}
+
+/**
+ * 收集未翻译的候选段落元素（滚动懒翻译观察用）。
+ * 与 collectParagraphs 差异：不截断（charBudget）、不要求可见（IO 触发时自然判断）、
+ * 不做文本去重——重复段落靠 background 翻译缓存去重出网，但每个元素都要自己的 wrapper。
+ */
+export function collectUntranslatedEls(config: UserConfig): HTMLElement[] {
+  const minChars = config.engine.minParagraphChars;
+  const out: HTMLElement[] = [];
+  const candidates = findMainRoot().querySelectorAll<HTMLElement>(BLOCK_SELECTOR);
+  for (const el of candidates) {
+    if (el.closest(SKIP_ANCESTOR)) continue;
+    if (el.querySelector(`.${WRAPPER_CLASS}`)) continue; // 已翻译
+    if (hasNestedBlock(el)) continue; // 只取最内层
+    const raw = el.innerText ?? el.textContent ?? '';
+    if (!isTranslatable(normalizeText(raw), minChars)) continue;
+    out.push(el);
   }
   return out;
 }

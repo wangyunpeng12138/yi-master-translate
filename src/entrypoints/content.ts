@@ -1,7 +1,8 @@
 import type { UserConfig } from '@/core/config/defaults';
-import { collectParagraphs, WRAPPER_CLASS } from '@/engine/walker';
-import { showTranslation } from '@/engine/renderer';
+import { collectParagraphs, collectUntranslatedEls, WRAPPER_CLASS } from '@/engine/walker';
+import { isTranslated, showTranslation } from '@/engine/renderer';
 import { translateTexts } from '@/engine/translator';
+import { isTranslatable, normalizeText } from '@/core/shared/utils';
 import { mountFloatBall, setFloatBallState, unmountFloatBall } from '@/engine/floatball';
 import { initSelection, disposeSelection } from '@/engine/selection';
 import { initHover, disposeHover } from '@/engine/hover';
@@ -24,6 +25,78 @@ let translating = false;
 let injectedStyleEl: HTMLStyleElement | null = null;
 /** 翻译前的原始 title（restore 时还原；防止二次翻译把已译标题再翻，污染原文） */
 let originalTitle: string | null = null;
+
+/* ---------- 滚动懒翻译（原版「边看边译」：首屏预翻译 + IntersectionObserver 增量补全） ---------- */
+let pageTranslating = false;
+let lazyObserver: IntersectionObserver | null = null;
+const lazyPending = new Set<HTMLElement>();
+let lazyBusy = false;
+
+function stopLazyTranslate(): void {
+  lazyObserver?.disconnect();
+  lazyObserver = null;
+  lazyPending.clear();
+}
+
+async function flushLazy(c: UserConfig): Promise<void> {
+  if (lazyBusy) return;
+  lazyBusy = true;
+  try {
+    while (pageTranslating && lazyPending.size > 0) {
+      const els = [...lazyPending];
+      lazyPending.clear();
+      const texts: string[] = [];
+      const targets: HTMLElement[] = [];
+      for (const el of els) {
+        lazyObserver?.unobserve(el);
+        if (isTranslated(el)) continue;
+        const text = normalizeText(el.innerText ?? el.textContent ?? '');
+        if (!isTranslatable(text, c.engine.minParagraphChars)) continue;
+        texts.push(text);
+        targets.push(el);
+      }
+      if (texts.length === 0) continue;
+      // 分小批逐批翻：单批失败只丢该批（一次消息通道失败不致整页懒翻译全废）
+      const BATCH = 24; // 与 translator.CHUNK 对齐，每批恰好一条消息
+      for (let i = 0; i < texts.length; i += BATCH) {
+        if (!pageTranslating) break; // 中途被 restore
+        const slice = texts.slice(i, i + BATCH);
+        const targetSlice = targets.slice(i, i + BATCH);
+        try {
+          const results = await translateTexts(slice, 'auto', c.general.targetLanguage, c.general.service, 'page');
+          targetSlice.forEach((el, j) => {
+            const translated = results[j] ?? '';
+            if (translated && translated !== slice[j]) showTranslation(el, translated, c);
+          });
+        } catch (e) {
+          console.error(`[imt-rebuild] lazy translate failed (batch ${i / BATCH + 1}):`, e);
+        }
+      }
+    }
+  } finally {
+    lazyBusy = false;
+    if (pageTranslating && lazyPending.size > 0) void flushLazy(c); // 处理期间新入视口的兑底
+  }
+}
+
+function startLazyTranslate(c: UserConfig): void {
+  stopLazyTranslate();
+  lazyObserver = new IntersectionObserver(
+    (entries) => {
+      if (!pageTranslating) return;
+      // 关键：observe() 注册时每个元素都会异步触发一次初始回调（含 isIntersecting=false 的），
+      // 必须只收相交元素，否则全页元素一次性进 pending，懒翻译退化成立即全页翻译
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        lazyPending.add(e.target as HTMLElement);
+      }
+      if (lazyPending.size > 0) void flushLazy(c);
+    },
+    // 提前 800px 双向预载（上方扩 800 防快速回滚白屏，下方扩 800 滚动无感）
+    { rootMargin: '800px 0px 800px 0px' },
+  );
+  for (const el of collectUntranslatedEls(c)) lazyObserver.observe(el);
+}
 
 function reportStatus(state: 'idle' | 'translating' | 'done' | 'error'): void {
   void browser.runtime
@@ -64,6 +137,8 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
       document.title = originalTitle;
       originalTitle = null;
     }
+    pageTranslating = false;
+    stopLazyTranslate();
     setFloatBallState(false);
     reportStatus('idle');
     return;
@@ -87,9 +162,16 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   try {
     const texts = paragraphs.map((p) => p.text);
     const results = await translateTexts(texts, 'auto', c.general.targetLanguage, c.general.service, 'page');
-    paragraphs.forEach((p, i) => showTranslation(p.el, results[i] ?? '', c));
+    // 「译文==原文」不插 wrapper：纯数字/目录编号等无需翻译段，以及服务原样返回的段
+    paragraphs.forEach((p, i) => {
+      const translated = results[i] ?? '';
+      if (translated && translated !== texts[i]) showTranslation(p.el, translated, c);
+    });
     if (c.engine.translateTitle) void translateTitle(c);
     reportStatus('done');
+    // 首屏完成后启动滚动增量：剩余段落进入视口前 800px 时自动补翻（边看边译）
+    pageTranslating = true;
+    startLazyTranslate(c);
   } catch (e) {
     console.error('[imt-rebuild] translate failed:', e);
     reportStatus('error');
@@ -186,6 +268,8 @@ export default defineContentScript({
             if (!config.floatball.enabled) unmountFloatBall();
             else void mountBallOnce();
             setupInteractions(config);
+            // 翻译中收到新配置：懒翻译观察器重启，新段落用新配置（目标语言/服务）
+            if (pageTranslating) startLazyTranslate(config);
           }
         }
         if (msg?.type === 'translateImage' && msg.payload?.srcUrl) {
