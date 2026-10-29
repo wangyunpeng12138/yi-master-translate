@@ -55,6 +55,10 @@ onMounted(() => store.load());
       <el-switch :model-value="store.config.engine.sameLangCheck" @update:model-value="store.patch({ engine: { sameLangCheck: $event } })" />
     </SettingRow>
 
+    <SettingRow title="译文起始标识" desc="每段译文第一个字前显示带背景色的「译」小标签，固定标示翻译开始">
+      <el-switch :model-value="store.config.general.translationMark" @update:model-value="store.patch({ general: { translationMark: $event } })" />
+    </SettingRow>
+
     <SettingRow title="Loading 样式" desc="等待译文加载时的样式">
       <el-select
         :model-value="store.config.engine.loadingTheme"

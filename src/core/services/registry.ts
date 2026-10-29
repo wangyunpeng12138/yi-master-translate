@@ -3,7 +3,7 @@ import type { ServiceDefinition, ServiceAdapter } from './types';
 import { bingAdapter } from './adapters/bing';
 import { googleAdapter } from './adapters/google';
 import { transmartAdapter } from './adapters/transmart';
-import { openaiCompatibleAdapter } from './adapters/openai-compatible';
+import { openaiCompatibleAdapter, isLocalUrl } from './adapters/openai-compatible';
 
 /**
  * 服务注册表（对齐原版分组：免费机器翻译 + 自定义 AI 槽位）
@@ -93,7 +93,8 @@ export function listServices(config?: UserConfig): ServiceDefinition[] {
     batchLimit: 8,
     defaultMaxRps: c.maxRps || 5,
     needsKey: true,
-    needsSetup: !c.apiKey,
+    // 本地回环地址（Ollama 等）无鉴权可空 key，视为已配置（ServicePicker aiOnly 过滤依赖）
+    needsSetup: !c.apiKey && !isLocalUrl(c.apiUrl),
   }));
   const seen = new Set(custom.map((c) => c.id));
   return [...custom, ...BUILTIN_SERVICES.filter((s) => !seen.has(s.id))];

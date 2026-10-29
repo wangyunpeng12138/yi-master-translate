@@ -27,6 +27,7 @@ export interface UserConfig {
     sameLangTheme: 'none' | 'background'; // 原 sameLangTranslationTheme
     translationTheme: string; // 译文显示样式主题
     translationPosition: TranslationPosition; // 原 translationPosition: after
+    translationMark: boolean; // 译文起始标识：每段译文首带背景色「译」小标签（本复刻版新增）
     forceNoneThemeUrls: string[]; // 强制「无」样式的域名
   };
   /** 引擎（原分散在 default_config 顶层的段落行为参数） */
@@ -170,6 +171,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     sameLangTheme: 'background',
     translationTheme: 'none',
     translationPosition: 'after',
+    translationMark: true,
     forceNoneThemeUrls: [],
   },
   engine: {

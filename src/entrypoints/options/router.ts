@@ -3,6 +3,7 @@ import Placeholder from './pages/Placeholder.vue';
 import Preview from './pages/Preview.vue';
 import General from './pages/General.vue';
 import Services from './pages/Services.vue';
+import AiServices from './pages/AiServices.vue';
 import Input from './pages/Input.vue';
 import Floating from './pages/Floating.vue';
 import Shortcuts from './pages/Shortcuts.vue';
@@ -24,6 +25,7 @@ import Developer from './pages/Developer.vue';
 const PAGE_MAP: Record<string, unknown> = {
   general: General,
   services: Services,
+  ai_services: AiServices,
   input: Input,
   floating: Floating,
   shortcuts: Shortcuts,
@@ -49,6 +51,7 @@ const PAGE_MAP: Record<string, unknown> = {
 export const SECTIONS: Array<{ path: string; title: string; phase: string }> = [
   { path: 'general', title: '基本设置', phase: 'P5' },
   { path: 'services', title: '翻译服务', phase: 'P5' },
+  { path: 'ai_services', title: 'AI 服务', phase: 'P10' },
   { path: 'ai', title: 'AI 专家', phase: 'P6' },
   { path: 'terms', title: 'AI 术语库', phase: 'P6' },
   { path: 'writing', title: 'AI Write', phase: 'P7' },

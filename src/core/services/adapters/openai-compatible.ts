@@ -36,7 +36,8 @@ function resolveEndpoint(config: UserConfig, serviceId: string): {
 } {
   const custom = config.customServices.find((c) => c.id === serviceId);
   const preset = PRESETS[serviceId];
-  if (custom && custom.apiKey) {
+  // 本地回环地址（Ollama 等）无鉴权，允许空 key；其余必须配置 key
+  if (custom && (custom.apiKey || isLocalUrl(custom.apiUrl))) {
     return {
       apiKey: custom.apiKey,
       apiUrl: normalizeApiUrl(custom.apiUrl || preset?.apiUrl || 'https://api.openai.com/v1/chat/completions'),
@@ -55,6 +56,19 @@ function resolveEndpoint(config: UserConfig, serviceId: string): {
 
 function isAnthropic(url: string): boolean {
   return url.includes('anthropic.com');
+}
+
+/**
+ * 本地回环地址（Ollama 等本地推理服务默认无鉴权）：此类地址允许空 API Key。
+ * 非本地服务仍要求 key（resolveEndpoint 校验）；预设模板 Ollama 依赖此规则。
+ */
+export function isLocalUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw.trim());
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -133,9 +147,9 @@ async function translateOne(
     'Content-Type': 'application/json',
   };
   if (anthropic) {
-    headers['x-api-key'] = ep.apiKey;
+    if (ep.apiKey) headers['x-api-key'] = ep.apiKey;
     headers['anthropic-version'] = '2023-06-01';
-  } else {
+  } else if (ep.apiKey) {
     headers.Authorization = `Bearer ${ep.apiKey}`;
   }
 

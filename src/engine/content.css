@@ -6,6 +6,21 @@
   margin: 0 2px;
 }
 
+/* 译文起始标识「译」：每段译文第一个字符前的小标签（可配置关闭） */
+.imt-rebuild-trans-mark {
+  display: inline-block;
+  margin-right: 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #5470c6, #91a8e8);
+  color: #fff;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+  user-select: none;
+}
+
 /* 主题：虚线 */
 .imt-rebuild-theme-dashed {
   text-decoration: underline dashed rgba(128, 128, 128, 0.6);

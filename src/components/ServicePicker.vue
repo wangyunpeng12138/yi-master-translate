@@ -13,12 +13,19 @@ const props = defineProps<{
   modelValue: string;
   /** 允许选择 inherit（用于字幕/输入框等子场景） */
   allowInherit?: boolean;
+  /** 仅列出已配置可用的 AI 服务（用于 AI 搜索等必须 AI 的场景；
+   *  需 key 但未填/非本地的服务会被过滤，避免选中后必然报错） */
+  aiOnly?: boolean;
 }>();
 
 const emit = defineEmits<{ 'update:modelValue': [v: string] }>();
 
 const store = useConfigStore();
-const options = computed(() => listServices(store.config));
+const options = computed(() =>
+  props.aiOnly
+    ? listServices(store.config).filter((s) => s.kind === 'ai' && !s.needsSetup)
+    : listServices(store.config),
+);
 const showInherit = computed(() => props.allowInherit);
 </script>
 

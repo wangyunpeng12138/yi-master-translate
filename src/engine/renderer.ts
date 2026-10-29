@@ -40,7 +40,17 @@ export function showTranslation(el: HTMLElement, translated: string, config: Use
   } else {
     wrapper.className = `${WRAPPER_CLASS} imt-rebuild-theme-${theme}`;
   }
-  wrapper.textContent = translated;
+  // 译文起始标识：译文首带背景色的小标签，固定标示翻译开始（可配置关闭）。
+  // 注意 wrapper 内容不能直接 textContent 赋值（会覆盖标识子元素）
+  wrapper.textContent = '';
+  if (config.general.translationMark) {
+    const mark = document.createElement('span');
+    mark.className = 'imt-rebuild-trans-mark';
+    mark.textContent = '译';
+    mark.title = '沉浸式翻译（复刻版）译文';
+    wrapper.appendChild(mark);
+  }
+  wrapper.appendChild(document.createTextNode(translated));
   removeLoading(el);
   el.setAttribute('data-imt-rebuild', 'translated');
 

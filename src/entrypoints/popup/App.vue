@@ -122,7 +122,7 @@ function openOptions(hash: string) {
       </div>
 
       <!-- AI 精翻（无自定义 AI 服务时无实际效果，禁用并提示） -->
-      <div class="ai-row" :title="hasCustomAi ? '' : '需先在「翻译服务」添加自定义 AI 服务（API Key）'">
+      <div class="ai-row" :title="hasCustomAi ? '' : '需先在「AI 服务」分区添加 AI 服务（API Key 或本地 Ollama）'">
         <span :class="{ 'ai-label-disabled': !hasCustomAi }">启用 AI 精翻</span>
         <el-switch
           size="small"
@@ -130,6 +130,23 @@ function openOptions(hash: string) {
           :disabled="!hasCustomAi"
           @update:model-value="store.patch({ ai: { enabled: $event } })"
         />
+      </div>
+
+      <!-- AI 搜索（与翻译服务分组独立；未配置 AI 服务时引导去设置页） -->
+      <div class="ai-row">
+        <span>AI 搜索</span>
+        <div v-if="hasCustomAi" class="explain-picker">
+          <ServicePicker
+            :model-value="store.config.explain.service"
+            allow-inherit ai-only
+            style="width: 160px"
+            @update:model-value="store.patch({ explain: { service: $event } })"
+          />
+        </div>
+        <div v-else class="explain-empty">
+          <span class="explain-hint">未配置 AI 服务</span>
+          <el-button size="small" text type="primary" @click="openOptions('#ai_services')">去配置</el-button>
+        </div>
       </div>
 
       <!-- 翻译主按钮：状态跟随页面（翻译中 loading / 已翻译变切回） -->
@@ -232,6 +249,18 @@ function openOptions(hash: string) {
 .status-done { color: #1e9e6a; }
 .status-error { color: var(--el-color-danger); }
 .ai-label-disabled { color: var(--el-text-color-placeholder); }
+.explain-empty {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.explain-hint {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+}
+.explain-picker :deep(.el-select__wrapper) {
+  font-size: 12px;
+}
 .quick-row {
   display: flex;
   justify-content: space-around;
