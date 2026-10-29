@@ -78,6 +78,17 @@ export default defineBackground(() => {
     }
   });
 
+  // 内容引擎状态事件 → badge（译中 … / 完成 ✓ / 失败 × / 空闲清除）
+  browser.runtime.onMessage.addListener((msg: { type?: string; payload?: { state?: string } }) => {
+    if (msg?.type !== 'translation:status') return;
+    const state = msg.payload?.state;
+    const badge = state === 'translating' ? '…' : state === 'done' ? '✓' : state === 'error' ? '×' : '';
+    void browser.action.setBadgeText({ text: badge });
+    void browser.action.setBadgeBackgroundColor({
+      color: state === 'error' ? '#f56c6c' : state === 'done' ? '#1e9e6a' : '#888888',
+    });
+  });
+
   // UI 直接写 storage 的场景（多窗口）：广播给内容脚本
   onUserConfigChanged(() => {
     void broadcastConfig();

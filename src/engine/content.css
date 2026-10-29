@@ -1,0 +1,64 @@
+/* ===== 沉浸式翻译复刻版 · 内容引擎样式 ===== */
+
+/* 译文 wrapper（默认无主题） */
+.imt-rebuild-target-wrapper {
+  display: inline;
+  margin: 0 2px;
+}
+
+/* 主题：虚线 */
+.imt-rebuild-theme-dashed {
+  text-decoration: underline dashed rgba(128, 128, 128, 0.6);
+  text-underline-offset: 3px;
+}
+
+/* 主题：背景色 */
+.imt-rebuild-theme-background {
+  background-color: rgba(128, 128, 128, 0.18);
+  border-radius: 3px;
+}
+
+/* 主题：模糊（学习模式——P6 接 toggleTranslationMask 时用于整页切换） */
+.imt-rebuild-theme-blur {
+  filter: blur(0.5px);
+  transition: filter 0.2s ease;
+}
+
+/* 仅译文模式（P3 简化：原文淡化，P6 换完整隐藏方案） */
+.imt-rebuild-only-mode > :not(.imt-rebuild-target-wrapper) {
+  opacity: 0.35;
+}
+
+/* ===== 悬浮球 ===== */
+.imt-rebuild-floatball-wrap {
+  all: initial;
+  position: fixed;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2147483646;
+}
+
+.imt-rebuild-floatball {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ea4c89, #f7a8c4);
+  color: #fff;
+  font-size: 18px;
+  line-height: 44px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.imt-rebuild-floatball:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.imt-rebuild-floatball-active {
+  background: linear-gradient(135deg, #1e9e6a, #4fd1a5);
+}

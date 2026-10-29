@@ -7,6 +7,17 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-vue'],
+  // See https://wxt.dev/api/config.html
+  hooks: {
+    // WXT 自动生成的 options_ui 会覆盖用户 manifest，在最终产物上强制整页打开
+    // 注意：WXT 0.20 钩子签名为 (wxt, manifest)，第二参数才是 manifest
+    'build:manifestGenerated': (_wxt, manifest) => {
+      manifest.options_ui = {
+        ...(manifest.options_ui as object),
+        open_in_tab: true,
+      };
+    },
+  },
   vite: () => ({
     plugins: [
       // Element Plus 按需引入（P1 起，替代全量 987KB）
