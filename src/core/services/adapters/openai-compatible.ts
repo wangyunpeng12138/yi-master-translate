@@ -63,7 +63,7 @@ function fill(template: string, params: Record<string, string>): string {
 
 async function translateOne(
   text: string,
-  from: string,
+  _from: string, // 保留对齐适配器签名（AI 服务由模型自行识别源语言）
   to: string,
   ep: ReturnType<typeof resolveEndpoint>,
   opts: AdapterOptions | undefined,

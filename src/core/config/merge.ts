@@ -5,6 +5,17 @@
 
 type Plain = Record<string, unknown>;
 
+/** 深层 Partial：允许只传嵌套子对象的任意层片段（UI patch 场景） */
+export type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends (infer U)[]
+    ? U[] // 数组整体覆盖（不做元素级 Partial）
+    : T[K] extends object
+      ? T[K] extends (...args: never[]) => unknown
+        ? T[K]
+        : DeepPartial<T[K]>
+      : T[K];
+};
+
 export function isPlainObject(v: unknown): v is Plain {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }

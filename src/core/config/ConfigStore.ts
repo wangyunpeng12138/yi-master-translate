@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { DEFAULT_CONFIG, type UserConfig } from './defaults';
+import type { DeepPartial } from './merge';
 import {
   loadUserConfig,
   onUserConfigChanged,
@@ -26,8 +27,8 @@ export const useConfigStore = defineStore('config', {
       this.config = await loadUserConfig();
       this.loaded = true;
     },
-    async patch(p: Partial<UserConfig>) {
-      this.config = await saveUserConfig(p as UserConfig);
+    async patch(p: DeepPartial<UserConfig>) {
+      this.config = await saveUserConfig(p);
     },
     async reset() {
       await resetUserConfig();

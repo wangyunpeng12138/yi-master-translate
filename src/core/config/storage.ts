@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { DEFAULT_CONFIG, type UserConfig } from './defaults';
-import { deepMerge } from './merge';
+import { deepMerge, type DeepPartial } from './merge';
 
 /**
  * 存储封装（三层合并的第 3 层：用户配置）
@@ -16,7 +16,7 @@ export async function loadUserConfig(): Promise<UserConfig> {
   return deepMerge(DEFAULT_CONFIG, patch);
 }
 
-export async function saveUserConfig(patch: Partial<UserConfig> | UserConfig): Promise<UserConfig> {
+export async function saveUserConfig(patch: DeepPartial<UserConfig> | UserConfig): Promise<UserConfig> {
   const next = deepMerge(await loadUserConfig(), patch);
   await browser.storage.sync.set({ [SYNC_KEY]: next });
   return next;

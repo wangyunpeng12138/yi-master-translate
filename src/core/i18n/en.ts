@@ -1,5 +1,3 @@
-import zhCN from './zh-CN';
-
 /**
  * 英文文案（缺键回退中文）
  */
@@ -34,4 +32,4 @@ export default {
     testFailed: 'Service test failed',
     resetDone: 'Reset to defaults',
   },
-} as typeof zhCN;
+};

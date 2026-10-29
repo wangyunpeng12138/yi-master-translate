@@ -1,4 +1,4 @@
-import type { ServiceAdapter } from '../types';
+import type { ServiceAdapter } from './types';
 
 /**
  * 每秒最大请求数限流器（对齐原版「每秒最大请求数：超出进入排队」语义）
@@ -49,10 +49,13 @@ export function withRateLimit(
   };
 }
 
-/** 把段落按 batchLimit 切块 */
-export function chunkTexts(texts: string[], limit: number): string[][] {
-  const out: string[][] = [];
+/** 把列表按 batchLimit 切块（泛型：支持段落对象等任意元素） */
+export function chunk<T>(texts: T[], limit: number): T[][] {
+  const out: T[][] = [];
   const size = Math.max(1, limit);
   for (let i = 0; i < texts.length; i += size) out.push(texts.slice(i, i + size));
   return out;
 }
+
+// 兼容旧导出名（段落切块）
+export const chunkTexts = chunk;

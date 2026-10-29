@@ -1,9 +1,9 @@
 import type { UserConfig } from '@/core/config/defaults';
 import type { TranslateRequest } from '@/core/shared/types';
 import { isTranslatable, normalizeText } from '@/core/shared/utils';
-import type { TranslateCache } from './cache';
+import { TranslateCache } from './cache';
 import { getAdapter } from './registry';
-import { chunkTexts, RateLimiter, withRateLimit } from './queue';
+import { chunk, RateLimiter, withRateLimit } from './queue';
 
 /**
  * 翻译批处理调度（background 内核入口）
@@ -71,11 +71,11 @@ export async function translateBatch(
 
   // 3. 分块请求（缓存未命中部分）
   const newEntries: Record<string, string> = {};
-  for (const chunk of chunkTexts(pending, adapter.batchLimit)) {
-    const chunkTexts2 = chunk.map((p) => p.text);
-    const out = await adapter.translate(chunkTexts2, req.from, req.to, opts);
+  for (const batch of chunk(pending, adapter.batchLimit)) {
+    const batchTexts = batch.map((p) => p.text);
+    const out = await adapter.translate(batchTexts, req.from, req.to, opts);
     out.forEach((translated, j) => {
-      const item = chunk[j];
+      const item = batch[j];
       results[item.idx] = translated;
       newEntries[item.key] = translated;
     });

@@ -1,8 +1,10 @@
 import { browser } from 'wxt/browser';
 import { loadUserConfig, onUserConfigChanged, saveUserConfig } from '@/core/config/storage';
+import type { DeepPartial } from '@/core/config/merge';
+import type { UserConfig } from '@/core/config/defaults';
 import { TranslateCache } from '@/core/services/cache';
 import { translateBatch } from '@/core/services/aiBatch';
-import type { RequestMessage } from '@/core/messaging/protocol';
+import type { TranslateRequest } from '@/core/shared/types';
 
 /**
  * 后台 Service Worker（P2：配置中心 + 翻译调度 + 命令分发）
@@ -50,7 +52,7 @@ export default defineBackground(() => {
 
   // 请求-响应消息处理
   browser.runtime.onMessage.addListener((raw: unknown) => {
-    const msg = raw as RequestMessage<keyof import('@/core/messaging/protocol').RequestMap>;
+    const msg = raw as { type?: string; payload?: unknown };
     if (!msg || typeof msg.type !== 'string') return;
 
     switch (msg.type) {
@@ -58,15 +60,18 @@ export default defineBackground(() => {
         return loadUserConfig();
       case 'config:set':
         return (async () => {
-          await saveUserConfig((msg as { payload?: unknown }).payload as never);
+          await saveUserConfig(msg.payload as DeepPartial<UserConfig>);
           await broadcastConfig();
           return { ok: true as const };
         })();
       case 'translate:batch':
-        return translateBatch({ cache, loadConfig: loadUserConfig }, (msg as { payload: never }).payload);
+        return translateBatch(
+          { cache, loadConfig: loadUserConfig },
+          msg.payload as TranslateRequest,
+        );
       case 'cache:query': {
         return (async () => {
-          const keys = ((msg as { payload?: { keys?: string[] } }).payload?.keys ?? []) as string[];
+          const keys = ((msg.payload as { keys?: string[] })?.keys ?? []) as string[];
           const hits = await cache.query(keys);
           return { hits };
         })();

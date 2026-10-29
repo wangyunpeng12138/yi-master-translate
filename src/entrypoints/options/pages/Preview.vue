@@ -57,13 +57,13 @@ onUnmounted(() => unbind?.());
 
     <h3>{{ t('preview.configBinding') }}</h3>
     <SettingRow :title="t('general.targetLanguage')" :desc="t('general.targetLanguageDesc')">
-      <LangPicker v-model="store.config.general.targetLanguage" @update:model-value="store.patch({ general: { targetLanguage: $event } })" />
+      <LangPicker :model-value="store.config.general.targetLanguage" @update:model-value="store.patch({ general: { targetLanguage: $event } })" />
     </SettingRow>
     <SettingRow :title="t('general.interfaceLanguage')" :desc="t('general.interfaceLanguageDesc')">
-      <LangPicker v-model="store.config.general.interfaceLanguage" @update:model-value="store.patch({ general: { interfaceLanguage: $event } })" />
+      <LangPicker :model-value="store.config.general.interfaceLanguage" @update:model-value="store.patch({ general: { interfaceLanguage: $event as 'zh-CN' | 'en' } })" />
     </SettingRow>
     <SettingRow :title="t('general.service')" :desc="t('general.serviceDesc')">
-      <ServicePicker v-model="store.config.general.service" @update:model-value="store.patch({ general: { service: $event } })" />
+      <ServicePicker :model-value="store.config.general.service" @update:model-value="store.patch({ general: { service: $event } })" />
     </SettingRow>
     <SettingRow :title="t('general.displayMode')" :desc="t('general.displayModeDesc')">
       <el-select
