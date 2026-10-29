@@ -87,6 +87,75 @@ export async function applyProxySettings(config: UserConfig): Promise<void> {
   }
 }
 
+/* ---------- 本地 AI 服务 CORS 兼容（Ollama 等） ----------
+ * 实测（Ollama 0.30.9）：扩展 SW fetch 自动携带 Origin: chrome-extension://<id>，
+ * Ollama 的 OLLAMA_ORIGINS 默认白名单不含浏览器扩展 → HTTP 403 直接拒绝。
+ * 用 DNR modifyHeaders（需 declarativeNetRequestWithHostAccess，已具备）对
+ * 用户配置的自定义服务端点移除 Origin 头，让本地服务视为非浏览器请求放行。
+ * session 规则（重启浏览器自动消失，每次 SW 启动/配置变化时重建）。
+ */
+
+const LOCAL_SERVICE_DNR_RULE_ID = 900001;
+
+export async function applyLocalServiceDnr(config: UserConfig): Promise<void> {
+  const chromeApi = (globalThis as { chrome?: { declarativeNetRequest?: ChromeDnrApi } }).chrome;
+  const dnr = chromeApi?.declarativeNetRequest;
+  if (!dnr?.updateSessionRules) {
+    console.warn('[imt-rebuild] chrome.declarativeNetRequest 不可用，跳过本地服务规则');
+    return;
+  }
+  try {
+    // 幂等：先移除旧规则
+    await dnr.updateSessionRules({ removeRuleIds: [LOCAL_SERVICE_DNR_RULE_ID] });
+    // 从自定义服务端点提取主机（域名部分；requestDomains 匹配不含端口）
+    const domains = new Set<string>();
+    for (const s of (config.customServices ?? []) as Array<Partial<CustomAiService>>) {
+      const url = s?.apiUrl;
+      if (!url) continue;
+      try {
+        domains.add(new URL(url).hostname);
+      } catch {
+        // 非法 URL 忽略
+      }
+    }
+    if (domains.size === 0) return;
+    await dnr.updateSessionRules({
+      addRules: [
+        {
+          id: LOCAL_SERVICE_DNR_RULE_ID,
+          priority: 1,
+          condition: {
+            requestDomains: [...domains],
+            resourceTypes: ['xmlhttprequest' as never, 'other' as never],
+          },
+          action: {
+            type: 'modifyHeaders' as never,
+            requestHeaders: [{ header: 'Origin', operation: 'remove' as never }],
+          },
+        },
+      ],
+    });
+  } catch (e) {
+    console.error('[imt-rebuild] 本地服务 DNR 规则更新失败:', e);
+  }
+}
+
+/** chrome.declarativeNetRequest 最小类型声明（@types/chrome 兼容） */
+interface ChromeDnrApi {
+  updateSessionRules(details: {
+    removeRuleIds?: number[];
+    addRules?: Array<{
+      id: number;
+      priority: number;
+      condition: { requestDomains: string[]; resourceTypes: string[] };
+      action: {
+        type: 'modifyHeaders';
+        requestHeaders: Array<{ header: string; operation: string }>;
+      };
+    }>;
+  }): Promise<void>;
+}
+
 /** chrome.proxy 最小类型声明（@types/chrome 的 chrome.proxy 兼容） */
 interface ChromeProxySettings {
   settings: {

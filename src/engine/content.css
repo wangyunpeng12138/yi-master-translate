@@ -29,6 +29,23 @@
   opacity: 0.35;
 }
 
+/* ===== 翻译中 loading 占位（原版 loadingTheme：spinner / text） ===== */
+.imt-rebuild-loading {
+  display: inline-block;
+  margin: 0 2px;
+  color: #5470c6;
+  font-size: 0.9em;
+}
+
+.imt-rebuild-loading:not(:empty) {
+  animation: imt-rebuild-loading-spin 1s linear infinite;
+}
+
+@keyframes imt-rebuild-loading-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ===== 悬浮球 ===== */
 .imt-rebuild-floatball-wrap {
   all: initial;

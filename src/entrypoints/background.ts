@@ -5,7 +5,7 @@ import type { UserConfig } from '@/core/config/defaults';
 import { TranslateCache } from '@/core/services/cache';
 import { translateBatch } from '@/core/services/aiBatch';
 import { getAdapter } from '@/core/services/registry';
-import { applyProxySettings } from '@/core/services/proxy';
+import { applyProxySettings, applyLocalServiceDnr } from '@/core/services/proxy';
 import type { TranslateRequest } from '@/core/shared/types';
 
 /**
@@ -262,10 +262,17 @@ export default defineBackground(() => {
     void broadcastConfig();
   });
 
-  // 网络代理：SW 启动同步一次 + 配置变化时重新应用（chrome.proxy 为浏览器级持久设置）
-  void loadUserConfig().then(applyProxySettings);
+  // 网络代理 + 本地服务 CORS 兼容：SW 启动同步一次 + 配置变化时重新应用
+  // （代理为浏览器级持久设置；DNR session 规则随浏览器重启消失，每次启动重建）
+  void loadUserConfig().then((c) => {
+    void applyProxySettings(c);
+    void applyLocalServiceDnr(c);
+  });
   onUserConfigChanged(() => {
-    void loadUserConfig().then(applyProxySettings);
+    void loadUserConfig().then((c) => {
+      void applyProxySettings(c);
+      void applyLocalServiceDnr(c);
+    });
   });
 
   // 右键菜单（P6：对齐原版 4 项基础菜单）

@@ -1,6 +1,6 @@
 import type { UserConfig } from '@/core/config/defaults';
 import { collectParagraphs, collectUntranslatedEls, WRAPPER_CLASS } from '@/engine/walker';
-import { isTranslated, showTranslation } from '@/engine/renderer';
+import { isTranslated, showLoading, showTranslation } from '@/engine/renderer';
 import { translateTexts, PAGE_EPOCH } from '@/engine/translator';
 import { isSameTargetLang, isTranslatable, normalizeText } from '@/core/shared/utils';
 import { mountFloatBall, setFloatBallStatus, unmountFloatBall } from '@/engine/floatball';
@@ -68,13 +68,16 @@ async function flushLazy(c: UserConfig): Promise<void> {
         if (!pageTranslating) break; // 中途被 restore
         const slice = texts.slice(i, i + BATCH);
         const targetSlice = targets.slice(i, i + BATCH);
+        targetSlice.forEach((el) => showLoading(el, c)); // 立即反馈
         try {
           const results = await translateTexts(slice, 'auto', c.general.targetLanguage, c.general.service, 'page');
           targetSlice.forEach((el, j) => {
             const translated = results[j] ?? '';
             if (translated && translated !== slice[j]) showTranslation(el, translated, c);
+            else removeLoadingInline(el);
           });
         } catch (e) {
+          targetSlice.forEach((el) => removeLoadingInline(el));
           console.error(`[imt-rebuild] lazy translate failed (batch ${i / BATCH + 1}):`, e);
         }
       }
@@ -150,6 +153,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     }
     pageTranslating = false;
     stopLazyTranslate();
+    document.querySelectorAll('.imt-rebuild-loading').forEach((n) => n.remove());
     setFloatBallStatus('idle');
     reportStatus('idle');
     return;
@@ -172,16 +176,33 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
   setFloatBallStatus('translating');
   reportStatus('translating');
   try {
-    const texts = paragraphs.map((p) => p.text);
-    const results = await translateTexts(texts, 'auto', c.general.targetLanguage, c.general.service, 'page');
-    // 「译文==原文」不插 wrapper：纯数字/目录编号等无需翻译段，以及服务原样返回的段
-    paragraphs.forEach((p, i) => {
-      const translated = results[i] ?? '';
-      if (translated && translated !== texts[i]) showTranslation(p.el, translated, c);
-    });
+    // 立即给全部待译段落插 loading 占位（原版 loadingTheme 语义）：
+    // AI 服务逐段推理慢，无占位会让用户长时间无任何反馈
+    paragraphs.forEach((p) => showLoading(p.el, c));
+    // 分小批渐进渲染：每批完成立即插入译文（免费通道缓存快、AI 逐段慢都能渐进出结果）
+    const BATCH = 8;
+    for (let i = 0; i < paragraphs.length; i += BATCH) {
+      if (!translationNotInterrupted()) break; // 中途被 restore
+      const slice = paragraphs.slice(i, i + BATCH);
+      const texts = slice.map((p) => p.text);
+      try {
+        const results = await translateTexts(texts, 'auto', c.general.targetLanguage, c.general.service, 'page');
+        // 「译文==原文」不插 wrapper：纯数字/目录编号等无需翻译段，以及服务原样返回的段
+        slice.forEach((p, j) => {
+          const translated = results[j] ?? '';
+          if (translated && translated !== texts[j]) showTranslation(p.el, translated, c);
+          else removeLoadingInline(p.el); // 无译文段也要清 loading
+        });
+      } catch (e) {
+        // 本批失败：清 loading 并继续后续批（部分成功优于全废）
+        slice.forEach((p) => removeLoadingInline(p.el));
+        console.error(`[imt-rebuild] translate failed (batch ${i / BATCH + 1}):`, e);
+        lastError = true;
+      }
+    }
     if (c.engine.translateTitle) void translateTitle(c);
-    reportStatus('done');
-    setFloatBallStatus('done');
+    reportStatus(lastError ? 'error' : 'done');
+    setFloatBallStatus(lastError ? 'error' : 'done');
     // 首屏完成后启动滚动增量：剩余段落进入视口前 800px 时自动补翻（边看边译）
     pageTranslating = true;
     startLazyTranslate(c);
@@ -190,9 +211,20 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     lastError = true;
     reportStatus('error');
     setFloatBallStatus('error');
+    document.querySelectorAll('.imt-rebuild-loading').forEach((n) => n.remove());
   } finally {
     translating = false;
   }
+}
+
+/** 翻译是否已被用户切回原文（restore 会移除全部 wrapper/loading，以 DOM 为中断信号） */
+function translationNotInterrupted(): boolean {
+  return document.querySelector('.imt-rebuild-target-wrapper, .imt-rebuild-loading') !== null;
+}
+
+/** 清单段 loading 占位（译文不插入时用） */
+function removeLoadingInline(el: HTMLElement): void {
+  el.querySelectorAll(':scope > .imt-rebuild-loading').forEach((n) => n.remove());
 }
 
 async function translateTitle(c: UserConfig): Promise<void> {
