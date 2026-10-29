@@ -105,6 +105,10 @@ onMounted(() => store.load());
     </div>
 
     <h3>AI / 自定义服务</h3>
+    <el-alert
+      title="添加 OpenAI 兼容服务后，点击卡片上的「测试」按钮可验证 API 连通性（会向该服务发送一句测试翻译请求）"
+      type="info" :closable="false" show-icon style="margin-bottom: 10px"
+    />
     <div class="service-grid">
       <div
         v-for="(c, i) in store.config.customServices"
@@ -121,6 +125,7 @@ onMounted(() => store.load());
           <el-button size="small" :disabled="store.config.general.service === c.id" @click="store.patch({ general: { service: c.id } })">
             {{ store.config.general.service === c.id ? '当前默认' : '设为默认' }}
           </el-button>
+          <el-button size="small" text type="primary" :loading="testing" @click="testService(c.id)">测试</el-button>
           <el-button size="small" text @click="openEdit(i)">编辑</el-button>
           <el-button size="small" text type="danger" @click="removeCustom(i)">删除</el-button>
         </div>

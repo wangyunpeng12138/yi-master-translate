@@ -1,10 +1,13 @@
 <script setup lang="ts">
 /**
  * 翻译服务选择器
- * 数据来自 core/services/registry（P2）；支持 inherit 选项（跟随主服务）
+ * 数据来自 core/services/registry；支持 inherit 选项（跟随主服务）；
+ * 内部读 ConfigStore 以列出用户自定义服务（否则下拉只显示内置服务，
+ * 选中自定义服务时会裸显服务 ID 而非用户配置的名称）
  */
 import { computed } from 'vue';
 import { listServices } from '@/core/services/registry';
+import { useConfigStore } from '@/core/config/ConfigStore';
 
 const props = defineProps<{
   modelValue: string;
@@ -14,7 +17,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [v: string] }>();
 
-const options = computed(() => listServices());
+const store = useConfigStore();
+const options = computed(() => listServices(store.config));
 const showInherit = computed(() => props.allowInherit);
 </script>
 

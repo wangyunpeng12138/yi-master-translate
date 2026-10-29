@@ -20,6 +20,8 @@ export interface AdapterOptions {
   terms?: Array<{ from: string; to: string }>;
   /** AI 专家系统提示词 */
   expertPrompt?: string;
+  /** 用户全局追加提示词（ai.promptAppend，注入 system 末尾；仅 AI 服务生效） */
+  promptAppend?: string;
   /** 温度等自定义服务参数 */
   temperature?: number;
   /** signal 用于取消 */

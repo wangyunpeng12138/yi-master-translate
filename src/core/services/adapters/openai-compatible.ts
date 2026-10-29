@@ -39,7 +39,7 @@ function resolveEndpoint(config: UserConfig, serviceId: string): {
   if (custom && custom.apiKey) {
     return {
       apiKey: custom.apiKey,
-      apiUrl: custom.apiUrl || preset?.apiUrl || 'https://api.openai.com/v1/chat/completions',
+      apiUrl: normalizeApiUrl(custom.apiUrl || preset?.apiUrl || 'https://api.openai.com/v1/chat/completions'),
       model: custom.model || preset?.model || 'gpt-4o-mini',
       temperature: custom.temperature ?? 0,
       requestBodyTemplate: custom.requestBodyTemplate,
@@ -55,6 +55,18 @@ function resolveEndpoint(config: UserConfig, serviceId: string): {
 
 function isAnthropic(url: string): boolean {
   return url.includes('anthropic.com');
+}
+
+/**
+ * API 地址归一化（对齐原版行为）：用户常填 Base URL（如 https://api.deepseek.com/v1），
+ * 自动补全为完整 chat 端点；已填完整地址（/chat/completions 或 /messages）则原样使用。
+ * 此前直接 POST 原值导致 Base URL 场景 404（实测：127.0.0.1:3425/v1 → 404）。
+ */
+function normalizeApiUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, ''); // 去尾斜杠
+  if (url.endsWith('/chat/completions') || url.endsWith('/messages')) return url;
+  if (isAnthropic(url)) return `${url}/messages`;
+  return `${url}/chat/completions`;
 }
 
 function fill(template: string, params: Record<string, string>): string {
@@ -80,6 +92,9 @@ async function translateOne(
     expert: opts?.expertPrompt ? `\n${opts.expertPrompt}` : '',
     terms: termsBlock,
   });
+  // 用户全局追加提示词：注入 system 末尾（领域定制，与专家提示词叠加；构造后追加
+  // 以保证对用户完全自定义 systemPrompt 的服务也生效）
+  const finalSystem = opts?.promptAppend ? `${systemPrompt}\n${opts.promptAppend}` : systemPrompt;
   const userPrompt = fill(ep.userPrompt || DEFAULT_USER_PROMPT, { to, text });
 
   let body: Record<string, unknown>;
@@ -88,7 +103,7 @@ async function translateOne(
       model: ep.model,
       max_tokens: 4096,
       temperature: ep.temperature,
-      system: systemPrompt,
+      system: finalSystem,
       messages: [{ role: 'user', content: userPrompt }],
     };
   } else {
@@ -96,7 +111,7 @@ async function translateOne(
       model: ep.model,
       temperature: ep.temperature,
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: finalSystem },
         { role: 'user', content: userPrompt },
       ],
     };

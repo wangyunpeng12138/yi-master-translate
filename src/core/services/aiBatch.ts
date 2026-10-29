@@ -56,6 +56,8 @@ export function buildAdapterOptions(config: UserConfig, scope: string) {
   return {
     terms,
     expertPrompt: config.ai.enabled && expert?.prompt ? expert.prompt : undefined,
+    // 用户全局追加提示词（ai.enabled 关闭时不注入，与专家提示词同门槛）
+    promptAppend: config.ai.enabled && config.ai.promptAppend?.trim() ? config.ai.promptAppend : undefined,
     scope,
   };
 }

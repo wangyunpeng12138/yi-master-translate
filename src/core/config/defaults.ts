@@ -118,6 +118,8 @@ export interface UserConfig {
     enabled: boolean; // 原 enableAiAssistant；默认关闭：免费机器通道用不到专家提示词，
     //    且未配置自定义 AI 服务时开启无实际效果（评审后对齐用户直觉）
     activeExpertId: string; // 'general'
+    /** 用户全局追加提示词：注入 AI 服务系统提示词末尾（领域定制），与专家提示词叠加 */
+    promptAppend: string;
     experts: Array<{ id: string; name: string; prompt: string; builtin?: boolean }>;
   };
   /** 术语库 */
@@ -247,6 +249,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   ai: {
     enabled: false,
     activeExpertId: 'general',
+    promptAppend: '',
     experts: [
       { id: 'general', name: '通用', builtin: true, prompt: '' },
       { id: 'tech', name: '科技领域', builtin: true, prompt: 'You are a professional technology translator.' },

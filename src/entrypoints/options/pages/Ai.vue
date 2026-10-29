@@ -60,6 +60,18 @@ onMounted(() => store.load());
       </el-select>
     </SettingRow>
 
+    <SettingRow
+      title="自定义追加提示词"
+      desc="注入 AI 服务系统提示词末尾的领域定制要求（与专家提示词叠加，仅 AI 服务生效）。如：金融文本请使用中国市场惯用术语"
+    >
+      <el-input
+        :model-value="store.config.ai.promptAppend"
+        type="textarea" :rows="3" style="width: 360px"
+        placeholder="例如：请使用简体中文技术社区惯用译法；专有名词保留英文"
+        @update:model-value="store.patch({ ai: { promptAppend: $event } })"
+      />
+    </SettingRow>
+
     <h3>专家列表</h3>
     <el-table :data="store.config.ai.experts" size="small" row-key="id">
       <el-table-column prop="name" label="名称" width="160" />
