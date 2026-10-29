@@ -7,6 +7,7 @@ import { initSelection, disposeSelection } from '@/engine/selection';
 import { initHover, disposeHover } from '@/engine/hover';
 import { initInputBox, disposeInputBox } from '@/engine/inputbox';
 import { initCircleSelect, disposeCircleSelect } from '@/engine/circleSelect';
+import { initSubtitle, disposeSubtitle } from '@/engine/subtitle';
 import { translateImage } from '@/engine/imageTranslate';
 import '@/engine/content.css';
 
@@ -101,6 +102,7 @@ function disposeInteractions(): void {
   disposeHover();
   disposeInputBox();
   disposeCircleSelect();
+  disposeSubtitle();
 }
 
 function setupInteractions(c: UserConfig): void {
@@ -109,6 +111,7 @@ function setupInteractions(c: UserConfig): void {
   initHover(c);
   initInputBox(c);
   initCircleSelect(c);
+  initSubtitle(c);
   applyInjectedCss(c);
 }
 

@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://www.pixiv.net/" },
+        { "header": "Origin", "operation": "set", "value": "https://www.pixiv.net/" }
+      ]
+    },
+    "condition": { "urlFilter": "||i.pximg.net/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://manhwato.com/" },
+        { "header": "Origin", "operation": "set", "value": "https://manhwato.com/" }
+      ]
+    },
+    "condition": { "urlFilter": "||stcdn.manhwato.com/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://weibo.com/" }
+      ]
+    },
+    "condition": { "urlFilter": "||sinaimg.cn/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://comic-growl.com/" }
+      ]
+    },
+    "condition": { "urlFilter": "||comic-growl.com/viewer/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://championcross.jp/" }
+      ]
+    },
+    "condition": { "urlFilter": "||championcross.jp/viewer/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://youngchampion.jp/" }
+      ]
+    },
+    "condition": { "urlFilter": "||youngchampion.jp/viewer/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://image.yymanhua.com/" }
+      ]
+    },
+    "condition": { "urlFilter": "||image.yymanhua.com/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://jcomic.net/" }
+      ]
+    },
+    "condition": { "urlFilter": "||images.jcomic.net/", "resourceTypes": ["image", "xmlhttprequest"], "domainType": "thirdParty" }
+  }
+]

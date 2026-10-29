@@ -1,36 +1,32 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import Text from './tabs/Text.vue';
+import Docs from './tabs/Docs.vue';
+import Image from './tabs/Image.vue';
+import Video from './tabs/Video.vue';
+import Guide from './tabs/Guide.vue';
 
+/** 侧边栏（P7）：文本 / 文档 / 视频 / 图片 / 教程 5 标签本地实现 */
 const tab = ref('text');
 </script>
 
 <template>
   <el-config-provider :locale="zhCn">
     <div class="sidepanel-shell">
-    <el-tabs v-model="tab" class="sidepanel-tabs">
-      <el-tab-pane label="文本" name="text">
-        <el-empty description="文本翻译（P7 实现）" :image-size="60" />
-      </el-tab-pane>
-      <el-tab-pane label="文档" name="docs">
-        <el-empty description="文档翻译（P7 实现）" :image-size="60" />
-      </el-tab-pane>
-      <el-tab-pane label="视频" name="video">
-        <el-empty description="视频字幕说明（P7 实现）" :image-size="60" />
-      </el-tab-pane>
-      <el-tab-pane label="图片" name="image">
-        <el-empty description="图片翻译（P7 实现）" :image-size="60" />
-      </el-tab-pane>
-      <el-tab-pane label="教程" name="guide">
-        <el-empty description="内置使用教程（P7 实现）" :image-size="60" />
-      </el-tab-pane>
-    </el-tabs>
+      <el-tabs v-model="tab" class="sidepanel-tabs">
+        <el-tab-pane label="文本" name="text" lazy><Text /></el-tab-pane>
+        <el-tab-pane label="文档" name="docs" lazy><Docs /></el-tab-pane>
+        <el-tab-pane label="视频" name="video" lazy><Video /></el-tab-pane>
+        <el-tab-pane label="图片" name="image" lazy><Image /></el-tab-pane>
+        <el-tab-pane label="教程" name="guide" lazy><Guide /></el-tab-pane>
+      </el-tabs>
     </div>
   </el-config-provider>
 </template>
 
 <style scoped>
 .sidepanel-shell {
-  padding: 8px;
+  padding: 8px 12px;
 }
 </style>

@@ -39,6 +39,15 @@ export default defineConfig({
       'declarativeNetRequestWithHostAccess',
     ],
     host_permissions: ['<all_urls>'],
+    declarative_net_request: {
+      rule_resources: [
+        {
+          id: 'rules_image',
+          enabled: true,
+          path: 'rules-image.json',
+        },
+      ],
+    },
     options_ui: {
       open_in_tab: true,
     },
