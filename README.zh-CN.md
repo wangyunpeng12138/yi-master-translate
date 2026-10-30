@@ -1,10 +1,10 @@
-# 译境 · Yijing
+# 译大师 · Yidashi
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**译境**（Yijing）是一款开源的双语网页翻译 Chrome 扩展（Manifest V3）。译文直接渲染在原文段落下方，无需离开页面即可双语对照阅读外文网页。
+**译大师**（Yidashi）是一款开源的双语网页翻译 Chrome 扩展（Manifest V3）。译文直接渲染在原文段落下方，无需离开页面即可双语对照阅读外文网页。
 
-> 「译境」取「沉浸之境」之意——在原文语境中沉浸式阅读译文。
+> 「译大师」——随身的浏览器翻译大师。
 
 本项目为使用 TypeScript 从零独立实现的开源工程，与其他产品的关系见[免责声明](#免责声明)。
 
@@ -91,4 +91,4 @@ src/
 
 ## 许可协议
 
-[MIT](./LICENSE) © Yijing Translate Contributors
+[MIT](./LICENSE) © Yidashi Translate Contributors

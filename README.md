@@ -1,10 +1,10 @@
-# Yijing · 译境
+# Yidashi · 译大师
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**Yijing** (译境) is an open-source bilingual web page translation extension for Chrome (Manifest V3). It renders translations inline, right below each original paragraph, so you can read foreign pages bilingually without leaving the page.
+**Yidashi** (译大师) is an open-source bilingual web page translation extension for Chrome (Manifest V3). It renders translations inline, right below each original paragraph, so you can read foreign pages bilingually without leaving the page.
 
-> Yijing means "the realm/context of translation" — 沉浸 (*immersive*) 之 *境*.
+> **Yidashi** (译大师) means "Master of Translation" — your personal translation master right in the browser.
 
 This project is an independent implementation written from scratch in TypeScript. See the [disclaimer](#disclaimer) for its relationship with other products.
 
@@ -91,4 +91,4 @@ This project is an **independent, open-source implementation** created for perso
 
 ## License
 
-[MIT](./LICENSE) © Yijing Translate Contributors
+[MIT](./LICENSE) © Yidashi Translate Contributors

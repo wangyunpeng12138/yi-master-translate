@@ -49,7 +49,7 @@ export function showTranslation(el: HTMLElement, translated: string, config: Use
     const mark = document.createElement('span');
     mark.className = 'imt-rebuild-trans-mark';
     mark.textContent = '译';
-    mark.title = '译境译文';
+    mark.title = '译大师译文';
     wrapper.appendChild(mark);
   }
   wrapper.appendChild(document.createTextNode(translated));

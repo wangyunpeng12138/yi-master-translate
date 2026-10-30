@@ -13,7 +13,7 @@ onMounted(() => store.load());
 
     <h3>漫画翻译</h3>
     <el-alert
-      title="译境使用本地 OCR（tesseract.js，随扩展打包）识别图片/漫画文字，无需会员额度。漫画站点防盗链由 DNR 规则集 rules-image.json 处理（见进阶说明）。"
+      title="译大师使用本地 OCR（tesseract.js，随扩展打包）识别图片/漫画文字，无需会员额度。漫画站点防盗链由 DNR 规则集 rules-image.json 处理（见进阶说明）。"
       type="info" :closable="false" show-icon style="margin-bottom: 8px"
     />
     <SettingRow title="启用漫画翻译入口" desc="在支持的漫画站显示翻译入口；图片右键菜单提供「翻译图片」">

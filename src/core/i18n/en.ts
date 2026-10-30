@@ -3,7 +3,7 @@
  */
 export default {
   app: {
-    name: 'Yijing',
+    name: 'Yidashi',
     version: 'Version',
   },
   nav: {

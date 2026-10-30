@@ -27,7 +27,7 @@ export interface UserConfig {
     sameLangTheme: 'none' | 'background'; // 原 sameLangTranslationTheme
     translationTheme: string; // 译文显示样式主题
     translationPosition: TranslationPosition; // 原 translationPosition: after
-    translationMark: boolean; // 译文起始标识：每段译文首带背景色「译」小标签（译境新增）
+    translationMark: boolean; // 译文起始标识：每段译文首带背景色「译」小标签（译大师新增）
     forceNoneThemeUrls: string[]; // 强制「无」样式的域名
   };
   /** 引擎（原分散在 default_config 顶层的段落行为参数） */
@@ -140,7 +140,7 @@ export interface UserConfig {
   cache: {
     enabled: boolean; // 开启本地翻译缓存
   };
-  /** 网络代理（译境新增能力：翻译接口经本地代理转发，应对直连不可达环境） */
+  /** 网络代理（译大师新增能力：翻译接口经本地代理转发，应对直连不可达环境） */
   network: {
     proxyEnabled: boolean; // 开启后接管浏览器代理：命中 proxyDomains 的请求走代理，其余直连
     proxyHost: string;

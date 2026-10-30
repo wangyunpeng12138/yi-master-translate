@@ -26,8 +26,8 @@ export default defineConfig({
     ],
   }),
   manifest: {
-    name: '译境',
-    short_name: '译境',
+    name: '译大师',
+    short_name: '译大师',
     description: '双语对照网页翻译 · 开源实现（Chrome MV3）',
     permissions: [
       'storage',
