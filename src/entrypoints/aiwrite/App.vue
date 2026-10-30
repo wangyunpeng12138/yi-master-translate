@@ -46,10 +46,10 @@ onMounted(async () => {
 <template>
   <el-config-provider :locale="zhCn">
     <div class="aiwrite-shell">
-      <h2>AI Write <el-tag size="small" type="info">复刻版</el-tag></h2>
+      <h2>AI Write <el-tag size="small" type="info">译境</el-tag></h2>
     <el-alert
       v-if="!hasCustom"
-      title="尚未配置自定义 AI 服务：请先到「翻译服务」分区添加自定义服务（API Key + 模型），AI Write 才能工作"
+      title="尚未配置 AI 服务：请先到「AI 服务」分区添加服务（预设模板或 API Key + 模型），AI Write 才能工作"
       type="warning" :closable="false" show-icon style="margin-bottom: 12px"
     />
 

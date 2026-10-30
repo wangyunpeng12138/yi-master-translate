@@ -3,7 +3,7 @@
  */
 export default {
   app: {
-    name: 'Immersive Translate (Rebuild)',
+    name: 'Yijing',
     version: 'Version',
   },
   nav: {

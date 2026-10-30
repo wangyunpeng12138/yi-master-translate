@@ -29,7 +29,7 @@ onMounted(async () => {
 
     <div class="ver-line">
       <span class="ver">{{ version }}</span>
-      <el-tag size="small" type="info">复刻版（本地工程）</el-tag>
+      <el-tag size="small" type="info">译境（开源工程）</el-tag>
     </div>
 
     <SettingRow title="启用扩展" desc="扩展功能总开关（关闭后快捷键与悬浮球均不响应）">
@@ -45,12 +45,12 @@ onMounted(async () => {
     </SettingRow>
 
     <div class="about-links">
-      <p>本扩展为沉浸式翻译 v1.34.4 的本地复刻学习工程：</p>
+      <p>译境是一款开源的双语网页翻译扩展（Chrome MV3），功能对齐沉浸式翻译 v1.34.4 的个人学习工程：</p>
       <ul class="feature-list">
         <li>保留：网页双语翻译、翻译服务（免费通道 + 自定义 API）、输入框/划词/圈选/悬停翻译、悬浮球、视频字幕、图片/漫画本地 OCR、术语库、AI 专家、配置导入导出、缓存、右键菜单</li>
         <li>裁剪：官网链接与推广位、会员付费体系、云同步、遥测、EPUB 在线制作、无字幕翻译（云端 ASR）</li>
       </ul>
-      <p class="license">仅供个人学习研究，请勿用于再分发；原扩展版权归 Funstory.ai Limited 所有。</p>
+      <p class="license">本项目为独立实现，与「沉浸式翻译」及其官方（Funstory.ai Limited）无任何关联或授权关系；「沉浸式翻译」名称及相关权利归其权利人所有。本项目仅供学习研究。</p>
     </div>
   </div>
 </template>

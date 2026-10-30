@@ -1,7 +1,7 @@
 {
-  "name": "immersive-translate-rebuild",
+  "name": "yijing-translate",
   "version": "0.1.0",
-  "description": "沉浸式翻译 Chrome 扩展复刻工程（MV3 + Vue3 + Element Plus + WXT）",
+  "description": "译境 — 双语对照网页翻译 Chrome 扩展（MV3 + Vue3 + Element Plus + WXT）",
   "private": true,
   "type": "module",
   "scripts": {

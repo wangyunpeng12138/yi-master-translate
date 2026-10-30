@@ -47,7 +47,7 @@ export function showResultPanel(
   const head = document.createElement('div');
   head.className = 'head';
   const title = document.createElement('span');
-  title.textContent = '沉浸式翻译（复刻版）';
+  title.textContent = '译境';
   const close = document.createElement('button');
   close.textContent = '关闭';
   close.onclick = () => destroyPanel();

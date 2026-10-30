@@ -14,7 +14,7 @@ const PLATFORMS = [
       （实现：<code>&lt;track&gt;</code> 拦截 + vtt 抓取翻译 + 自绘字幕层）。
     </p>
     <el-alert
-      title="范围说明：本复刻版仅翻译「已有字幕轨」的视频；无字幕视频的云端 ASR 实时识别（官方功能）已裁剪。YouTube 内嵌字幕优先级等开关见设置页「视频字幕」分区。"
+      title="范围说明：译境仅翻译「已有字幕轨」的视频；无字幕视频的云端 ASR 实时识别（官方功能）已裁剪。YouTube 内嵌字幕优先级等开关见设置页「视频字幕」分区。"
       type="info" :closable="false" show-icon style="margin: 10px 0"
     />
     <h4>支持平台（节选）</h4>

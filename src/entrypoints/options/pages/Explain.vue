@@ -29,7 +29,7 @@ async function exportTxt() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `术语解释_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `${new Date().toISOString().slice(0, 10).replaceAll('-', '')}_AI搜索汇总.txt`;
     a.click();
     URL.revokeObjectURL(url);
   } finally {

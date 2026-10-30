@@ -1,4 +1,4 @@
-/* ===== 沉浸式翻译复刻版 · 内容引擎样式 ===== */
+/* ===== 译境 · 内容引擎样式 ===== */
 
 /* 译文 wrapper（默认无主题） */
 .imt-rebuild-target-wrapper {
@@ -52,12 +52,23 @@
   font-size: 0.9em;
 }
 
-.imt-rebuild-loading:not(:empty) {
-  animation: imt-rebuild-loading-spin 1s linear infinite;
+/* spinner：纯 CSS 圆环（几何对称，绕盒中心自转）。
+ * 此前用 ⟳ 文字字符旋转：字形视觉重心偏离字符盒中心，旋转时看起来
+ * 像"绕外部圆心公转"（图标满页飞的根因）；文字一律不做旋转动画 */
+.imt-rebuild-loading-spinner::before {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  box-sizing: border-box;
+  border: 2px solid rgba(84, 112, 198, 0.25);
+  border-top-color: #5470c6;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: imt-rebuild-spin 0.8s linear infinite;
 }
 
-@keyframes imt-rebuild-loading-spin {
-  from { transform: rotate(0deg); }
+@keyframes imt-rebuild-spin {
   to { transform: rotate(360deg); }
 }
 

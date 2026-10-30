@@ -89,7 +89,7 @@ function openOptions(hash: string) {
     <div class="popup-shell">
       <!-- 顶部 -->
       <div class="popup-header">
-        <span class="brand">沉浸式翻译（复刻版）</span>
+        <span class="brand">译境</span>
         <el-tag size="small" type="info">v{{ version }}</el-tag>
       </div>
 

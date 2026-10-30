@@ -35,7 +35,7 @@ onMounted(() => store.load());
         <li>翻译写作：中文输入 → 英文输出，适合撰写外语邮件/issue</li>
         <li>与划词翻译、翻译服务共享同一套术语库与 AI 专家配置</li>
       </ul>
-      <p class="note">注：原版 Gmail/GitHub 的 "AI Reply" 注入依赖站点专用适配，本复刻版以独立面板提供等价能力（Gmail/GitHub 注点不做）。</p>
+      <p class="note">注：原版 Gmail/GitHub 的 "AI Reply" 注入依赖站点专用适配，译境以独立面板提供等价能力（Gmail/GitHub 注点不做）。</p>
     </div>
   </div>
 </template>

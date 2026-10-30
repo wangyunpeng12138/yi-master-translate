@@ -26,9 +26,9 @@ export default defineConfig({
     ],
   }),
   manifest: {
-    name: '沉浸式翻译（复刻版）',
-    short_name: '沉浸式翻译',
-    description: '双语对照网页翻译 · 本地复刻版（Chrome MV3）',
+    name: '译境',
+    short_name: '译境',
+    description: '双语对照网页翻译 · 开源实现（Chrome MV3）',
     permissions: [
       'storage',
       'activeTab',

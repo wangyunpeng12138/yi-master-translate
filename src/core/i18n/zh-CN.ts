@@ -3,7 +3,7 @@
  */
 export default {
   app: {
-    name: '沉浸式翻译（复刻版）',
+    name: '译境',
     version: '版本',
   },
   nav: {
@@ -105,6 +105,6 @@ export default {
     desc: '本页为 P1 基础设施验收：组件渲染 + 配置读写联动 + 服务测试',
     configBinding: '配置读写联动',
     serviceTest: '翻译服务测试（P2）',
-    testInput: 'Hello world, this is immersive translate rebuild.',
+    testInput: 'Hello world, this is Yijing translate.',
   },
 } as const;

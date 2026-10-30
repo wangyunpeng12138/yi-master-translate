@@ -12,7 +12,7 @@ const version = browser.runtime.getManifest().version;
     <el-container class="options-shell">
     <el-aside width="220px" class="options-aside">
       <div class="brand">
-        沉浸式翻译（复刻版）
+        译境
         <el-tag size="small" type="info">{{ version }}</el-tag>
       </div>
       <el-menu :default-active="route.path" router class="options-menu">

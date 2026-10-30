@@ -17,8 +17,10 @@ export function showLoading(el: HTMLElement, config: UserConfig): void {
   if (theme === 'none') return;
   if (el.querySelector(`:scope > .${LOADING_CLASS}`)) return;
   const loading = document.createElement('span');
-  loading.className = LOADING_CLASS;
-  loading.textContent = theme === 'text' ? '翻译中…' : '⟳';
+  // spinner 用纯 CSS 圆环（::before 绘制，元素本身留空）；text 为静态文字不旋转
+  //（文字字符旋转的视觉重心偏移会导致"图标满页飞"，见 content.css 注释）
+  loading.className = theme === 'text' ? LOADING_CLASS : `${LOADING_CLASS} imt-rebuild-loading-spinner`;
+  loading.textContent = theme === 'text' ? '翻译中…' : '';
   if (config.general.translationPosition === 'before') el.insertBefore(loading, el.firstChild);
   else el.appendChild(loading);
 }
@@ -47,7 +49,7 @@ export function showTranslation(el: HTMLElement, translated: string, config: Use
     const mark = document.createElement('span');
     mark.className = 'imt-rebuild-trans-mark';
     mark.textContent = '译';
-    mark.title = '沉浸式翻译（复刻版）译文';
+    mark.title = '译境译文';
     wrapper.appendChild(mark);
   }
   wrapper.appendChild(document.createTextNode(translated));
