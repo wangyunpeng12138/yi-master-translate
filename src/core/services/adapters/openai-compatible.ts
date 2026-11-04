@@ -1,6 +1,7 @@
 import type { UserConfig } from '@/core/config/defaults';
 import type { AdapterOptions, ServiceAdapter } from '../types';
 import { ServiceError } from '../types';
+import { withTimeout } from '../queue';
 
 /**
  * OpenAI 兼容适配器（覆盖原版自定义服务语义）
@@ -14,6 +15,9 @@ const DEFAULT_SYSTEM_PROMPT =
   'You are a professional translator. Translate the user text into {{to}} accurately and fluently. Keep the meaning, tone and formatting. Preserve code, placeholders and untranslated-proper nouns.{{expert}}{{terms}} Return ONLY the translated text without any explanation.';
 
 const DEFAULT_USER_PROMPT = 'Translate to {{to}}:\n\n{{text}}'; // 注意两个换行，与原版逐字对齐（评审 2.2-12）
+
+/** AI 请求默认超时：大模型逐段推理正常 10-40s，60s 兜底防止服务挂起无限转圈 */
+const FETCH_TIMEOUT_MS = 60_000;
 
 const PRESETS: Record<string, { apiUrl: string; model: string }> = {
   'openai-custom': { apiUrl: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -157,7 +161,7 @@ async function translateOne(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: opts?.signal,
+    signal: withTimeout(opts?.signal, FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 200);

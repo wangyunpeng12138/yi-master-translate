@@ -10,11 +10,13 @@ export interface PanelResult {
 let host: HTMLDivElement | null = null;
 let shadow: ShadowRoot | null = null;
 
-function ensureShadow(): void {
-  if (host) return;
+function ensureShadow(): ShadowRoot | null {
+  if (host && shadow) return shadow;
   host = document.createElement('div');
   host.className = 'imt-rebuild-panel-host';
-  host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;';
+  // left/top 显式 0：避免 fixed 元素以文档流静态位置停靠产生大块透明选区
+  //（此前实测 host 停靠在页面底部 1021×189，即使内容不可见也会拦截页面底部点击）
+  host.style.cssText = 'all:initial;position:fixed;left:0;top:0;z-index:2147483647;';
   shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
   style.textContent = `
@@ -27,11 +29,17 @@ function ensureShadow(): void {
     .body { padding: 10px 14px; }
     .orig { color: #909399; font-size: 12px; margin-bottom: 6px; max-height: 90px; overflow: auto; }
     .trans { font-size: 14px; white-space: pre-wrap; }
-    .trans.loading { color: #909399; }
+    /* 翻译中：圆环 spinner + 文案（大模型逐段推理较慢，必须有明确进度反馈） */
+    .trans.loading { color: #909399; display: flex; align-items: center; gap: 6px; }
+    .trans.loading::before { content: ''; flex: none; width: 12px; height: 12px;
+      box-sizing: border-box; border: 2px solid rgba(84,112,198,.25); border-top-color: #5470c6;
+      border-radius: 50%; animation: imt-panel-spin .8s linear infinite; }
+    @keyframes imt-panel-spin { to { transform: rotate(360deg); } }
     .err { color: #f56c6c; }
   `;
   shadow.appendChild(style);
   document.documentElement.appendChild(host);
+  return shadow;
 }
 
 export function showResultPanel(
@@ -39,9 +47,11 @@ export function showResultPanel(
   y: number,
   result: Promise<PanelResult>,
 ): void {
-  ensureShadow();
-  if (!shadow) return;
-  shadow.innerHTML = '';
+  const sr = ensureShadow();
+  if (!sr) return;
+  // 关键：只移除旧面板，不能 shadow.innerHTML=''——那会把 <style> 一起清掉，
+  // wrap 失去 position:fixed 等全部样式，沉到页面底部不可见（“划词无弹窗”根因）
+  sr.querySelectorAll('.wrap').forEach((n) => n.remove());
   const wrap = document.createElement('div');
   wrap.className = 'wrap';
   const head = document.createElement('div');
@@ -76,7 +86,7 @@ export function showResultPanel(
   // 先离屏测量再定位
   wrap.style.left = '-9999px';
   wrap.style.top = '0px';
-  shadow.appendChild(wrap);
+  sr.appendChild(wrap);
   requestAnimationFrame(place);
 
   result

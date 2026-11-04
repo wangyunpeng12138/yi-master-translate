@@ -209,7 +209,9 @@ export const DEFAULT_CONFIG: UserConfig = {
     autoSpeakWord: false,
     sameLangBehavior: 'translate',
     blockUrls: [],
-    service: 'free-ai',
+    // 'inherit' = 跟随主翻译服务（旧值 'free-ai' 语义保留在 selection.ts 兼容）；
+    // 此前默认 'free-ai' 在下拉中无对应项，会裸显原始值且实际解析到 customServices[0]
+    service: 'inherit',
   },
   hover: {
     holdKey: 'Off', // 原版默认字符串哨兵 "Off"（不做任何事情，评审修正）

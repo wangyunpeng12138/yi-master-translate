@@ -56,9 +56,10 @@ onMounted(() => store.load());
       />
     </SettingRow>
 
-    <SettingRow title="翻译服务" desc="划词翻译专用服务（仅 AI 类）">
+    <SettingRow title="翻译服务" desc="划词翻译专用服务（仅 AI 类；默认跟随全局翻译服务）">
       <ServicePicker
         :model-value="store.config.selection.service"
+        allow-inherit ai-only
         @update:model-value="store.patch({ selection: { service: $event } })"
       />
     </SettingRow>
