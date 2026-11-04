@@ -69,6 +69,8 @@ export interface UserConfig {
     sameLangBehavior: 'translate' | 'skip'; // 目标语言与原语言相同时
     blockUrls: string[];
     service: ServiceId; // 划词专用服务（AI）
+    aiSearchEnabled: boolean; // 划词 AI 搜索按钮（蓝色，选中后生成中文解释）
+    aiSearchService: ServiceId; // 划词 AI 搜索服务（默认 inherit 跟随 AI 搜索/主服务）
   };
   /** 鼠标悬停 */
   hover: {
@@ -212,6 +214,8 @@ export const DEFAULT_CONFIG: UserConfig = {
     // 'inherit' = 跟随主翻译服务（旧值 'free-ai' 语义保留在 selection.ts 兼容）；
     // 此前默认 'free-ai' 在下拉中无对应项，会裸显原始值且实际解析到 customServices[0]
     service: 'inherit',
+    aiSearchEnabled: true, // 选中即出现蓝色 AI 搜索按钮（与翻译按钮并存，可单独关闭）
+    aiSearchService: 'inherit', // inherit 解析链：explain.service → general.service
   },
   hover: {
     holdKey: 'Off', // 原版默认字符串哨兵 "Off"（不做任何事情，评审修正）

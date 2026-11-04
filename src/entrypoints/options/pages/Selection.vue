@@ -64,6 +64,24 @@ onMounted(() => store.load());
       />
     </SettingRow>
 
+    <h3>划词 AI 搜索</h3>
+    <el-alert
+      title="选中文字后额外显示蓝色 AI 搜索按钮：点击后由 AI 解读选中文字的含义、语境与背景，生成中文解释弹窗"
+      type="info" :closable="false" show-icon style="margin-bottom: 8px"
+    />
+
+    <SettingRow title="启用划词 AI 搜索" desc="选中文字后显示蓝色 AI 搜索按钮（与翻译按钮并存）">
+      <el-switch :model-value="store.config.selection.aiSearchEnabled" @update:model-value="store.patch({ selection: { aiSearchEnabled: $event } })" />
+    </SettingRow>
+
+    <SettingRow title="AI 搜索服务" desc="划词解释专用 AI 服务（默认跟随 AI 搜索/全局翻译服务）">
+      <ServicePicker
+        :model-value="store.config.selection.aiSearchService"
+        allow-inherit ai-only
+        @update:model-value="store.patch({ selection: { aiSearchService: $event } })"
+      />
+    </SettingRow>
+
     <SettingRow title="启用单词自动朗读" desc="划词后自动发音">
       <el-switch :model-value="store.config.selection.autoSpeakWord" @update:model-value="store.patch({ selection: { autoSpeakWord: $event } })" />
     </SettingRow>

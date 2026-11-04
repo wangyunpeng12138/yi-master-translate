@@ -46,6 +46,7 @@ export function showResultPanel(
   x: number,
   y: number,
   result: Promise<PanelResult>,
+  opts?: { title?: string; loadingText?: string },
 ): void {
   const sr = ensureShadow();
   if (!sr) return;
@@ -57,7 +58,7 @@ export function showResultPanel(
   const head = document.createElement('div');
   head.className = 'head';
   const title = document.createElement('span');
-  title.textContent = '译大师';
+  title.textContent = opts?.title ?? '译大师';
   const close = document.createElement('button');
   close.textContent = '关闭';
   close.onclick = () => destroyPanel();
@@ -68,7 +69,7 @@ export function showResultPanel(
   orig.className = 'orig';
   const trans = document.createElement('div');
   trans.className = 'trans loading';
-  trans.textContent = '翻译中…';
+  trans.textContent = opts?.loadingText ?? '翻译中…';
   body.append(orig, trans);
   wrap.append(head, body);
 

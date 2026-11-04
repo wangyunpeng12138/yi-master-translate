@@ -7,6 +7,7 @@ import { translateBatch } from '@/core/services/aiBatch';
 import { getAdapter } from '@/core/services/registry';
 import { applyProxySettings, applyLocalServiceDnr } from '@/core/services/proxy';
 import { buildExplainExport, clearExplainCache, explainParagraph } from '@/core/services/explain';
+import { searchSelection } from '@/core/services/selectionSearch';
 import type { TranslateRequest } from '@/core/shared/types';
 
 /**
@@ -208,6 +209,14 @@ export default defineBackground(() => {
         return (async () => {
           const removed = await clearExplainCache(storageArea);
           return { removed };
+        })();
+      }
+      case 'selection:search': {
+        // 划词 AI 搜索：选中文字的中文解释（缓存命中直接返回，否则调 AI 并写缓存）
+        return (async () => {
+          const text = (msg.payload as { text?: string })?.text;
+          if (!text) throw new Error('selection:search 缺少 text');
+          return searchSelection({ loadConfig: loadUserConfig, area: storageArea }, text);
         })();
       }
       case 'cache:query': {
