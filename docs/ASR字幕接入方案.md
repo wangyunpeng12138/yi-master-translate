@@ -1043,7 +1043,30 @@ http.createServer(async (req, res) => {
 **真机验证（x.com 无字幕视频）**：芯片出现在控制条（时间右侧、齿轮左侧）→ 点开面板 6 行齐全 → 开关从「已关闭」切到「语音识别中」→ 浮层出双语字幕 →
 再次点开关立即隐藏字幕并还原。
 
-### 14.4 待办（A3 起）
+### 14.4 x.com 原生 CC 轨道的接管（2026-11-09 追加，已验证）
+
+之前以为 x.com 视频「要么有 `<track>` 可抓、要么就得 ASR」。实测改正：
+
+| 事实 | 证据 |
+| --- | --- |
+| X **有**自动字幕的视频，播放器自带 CC 按钮 | 控制条里 `aria-label="显示字幕"`，图标 `icon-closed-caption-off`，位置在**静音按钮左侧**（用户观察正确） |
+| 但 `<track>` 的 src 是**空占位** | `track.getAttribute('src') === "data:,WEBVTT"` → 「抓 VTT 文件重建」路线完全无效 |
+| 真实字幕来自 HLS 的 SUBTITLES 轨道 | master playlist: `#EXT-X-MEDIA:TYPE=SUBTITLES,NAME="en (auto-generated)",CHARACTERISTICS="twitter.show-text-when-muted,twitter.auto-generated"` |
+| cues 在 `video.textTracks[0]` 里 | 把 `mode` 从 `disabled` 改成 `hidden`，**1 秒内**灌入 11 条 cue；cue 文本带私有标签 `<X-word-ms ms=...>`，剥掉后是干净英文 |
+| 没有自动字幕的视频（如 `arim_011/status/2119640814595063969`） | master playlist 里**没有** `TYPE=SUBTITLES`，控制条也没有 CC → 只能 ASR |
+
+**实现**（`src/engine/trackCaptionSession.ts`）：接管 `TextTrack` → `mode='hidden'` → 读全量 cues → 批量翻译 → 复用浮层按时间轴渲染双语。
+自动触发：`playing / volumechange / seeked` + 2s 低频巡检（**不能只听 `play`**：站点自动播放时不会再有新的 play 事件，实测踩过）。
+
+**这一轮修掉的 3 个 bug**：
+
+1. `data:,WEBVTT` 占位轨被标成「已处理」→ 面板显示"已开启"却什么都没发生，还挡住后续接管
+2. 浮层挂在 `video.parentElement` 里会被 X 重渲染冲掉（会话还活着、浮层没了）→ 改为 **body 级 fixed 浮层**按视频矩形定位，全屏时自动挂回全屏元素子树
+3. `ensureCuesReady` 有 await，会话登记在函数末尾 → 巡检会并发创建 4 个会话 → 改为**先登记再 await**
+
+**真机验证**：`are two worlds apart` → `是两个不同的世界吗`（截图见项目 `.temp/cdp/cc-native-track.png`），且只有 1 个会话。
+
+### 14.5 待办（A3 起）
 
 - **A2**：本地 Whisper（transformers.js + 模型下载/管理 + 单线程推理），注册进 `registry.ts` 的 `IMPLEMENTED`
 - **A3**：无轨提示条、播放器「译」按钮（手动触发）、`tiny→base` 渐进替换、AudioWorklet 替代 ScriptProcessor

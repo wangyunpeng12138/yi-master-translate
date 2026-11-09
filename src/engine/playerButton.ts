@@ -17,16 +17,27 @@ import {
 const BUTTON_ATTR = 'data-imt-cc-button';
 const HOST_ATTR = 'data-imt-cc-host';
 
-/** 音量类按钮（有则贴在其后） */
+/** 音量类按钮（有则贴在其后）。x.com 的静音按钮 aria 写的是「隐藏/取消隐藏」，
+ *  只能靠图标 `icon-sound-on|off` 识别（实测） */
 const VOLUME_SELECTORS = [
   'button[aria-label*="静音"]',
   'button[aria-label*="取消静音"]',
   'button[aria-label*="音量"]',
   'button[aria-label*="mute" i]',
   'button[aria-label*="volume" i]',
+  'button:has(svg[data-icon^="icon-sound"])',
   '.vjs-mute-control',
   '.ytp-mute-button',
   '[data-testid="volume"]',
+];
+
+/** 站点自带的 CC 按钮（x.com: aria「显示字幕/隐藏字幕」，图标 icon-closed-caption-off） */
+const NATIVE_CC_SELECTORS = [
+  'button[aria-label*="字幕"]',
+  'button[aria-label*="Captions" i]',
+  'button[aria-label*="Subtitles" i]',
+  'button[data-testid="captions"]',
+  'button:has(svg[data-icon*="closed-caption"])',
 ];
 
 /** 兜底：设置 / 全屏 / 字幕 按钮所在的控制簇（插到簇的最左） */
@@ -58,6 +69,9 @@ function findAnchor(video: HTMLVideoElement): Anchor | null {
   };
   const vol = pick(VOLUME_SELECTORS);
   if (vol?.parentElement) return { container: vol.parentElement, reference: vol, mode: 'after' };
+  // 优先贴着站点自带的 CC 按钮（x.com：CC 在静音按钮左侧，正是"音量设置前"）
+  const nativeCc = pick(NATIVE_CC_SELECTORS);
+  if (nativeCc?.parentElement) return { container: nativeCc.parentElement, reference: nativeCc, mode: 'after' };
   const cluster = pick(CLUSTER_SELECTORS);
   if (cluster?.parentElement) return { container: cluster.parentElement, reference: cluster, mode: 'before' };
   return null;

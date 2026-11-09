@@ -31,14 +31,6 @@ export interface CaptionLayerOptions {
 }
 
 export function createCaptionLayer(video: HTMLVideoElement, opts: CaptionLayerOptions = {}): CaptionLayerHandle {
-  const parent = video.parentElement ?? document.body;
-  // 浮层绝对定位需要父容器是定位上下文；静态的话我们临时改成 relative 并记下来
-  const patchedPosition = getComputedStyle(parent).position === 'static';
-  if (patchedPosition) {
-    parent.style.position = 'relative';
-    parent.setAttribute('data-imt-asr-pos', '1');
-  }
-
   const host = document.createElement('div');
   host.className = HOST_CLASS;
   const win = document.createElement('div');
@@ -52,13 +44,73 @@ export function createCaptionLayer(video: HTMLVideoElement, opts: CaptionLayerOp
 
   win.append(source, target, status);
   host.append(win);
-  parent.append(host);
+
+  /**
+   * 挂载策略：默认挂在 body 上、按视频矩形定位（position:fixed）。
+   * 原因：站点（X）重渲染播放器子树时会把注入节点一起冲掉（实测：会话还在、浮层消失）；
+   * body 级节点不受影响。全屏时只有全屏元素子树可见 → 这时才挂回 video 的父节点。
+   */
+  let mountedIn: HTMLElement | null = null;
+  const positionFor = () => {
+    const fs = document.fullscreenElement as HTMLElement | null;
+    const inFullscreen = !!fs && (fs === video || fs.contains(video));
+    if (inFullscreen) {
+      const parent = (video.parentElement ?? document.body) as HTMLElement;
+      if (mountedIn !== parent) {
+        parent.append(host);
+        mountedIn = parent;
+      }
+      Object.assign(host.style, { position: 'absolute', left: '0', top: '0', width: '100%', height: '100%' });
+      return;
+    }
+    if (mountedIn !== document.body) {
+      document.body.append(host);
+      mountedIn = document.body;
+    }
+    const r = video.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) {
+      host.style.display = 'none';
+      return;
+    }
+    Object.assign(host.style, {
+      position: 'fixed',
+      left: `${Math.round(r.left)}px`,
+      top: `${Math.round(r.top)}px`,
+      width: `${Math.round(r.width)}px`,
+      height: `${Math.round(r.height)}px`,
+    } as Partial<CSSStyleDeclaration>);
+    if (host.dataset.wantedVisible === '1') host.style.display = 'block';
+  };
+
+  const hostStyle: Partial<CSSStyleDeclaration> = {
+    position: 'fixed',
+    pointerEvents: 'none',
+    zIndex: '2147483000',
+    display: 'none',
+  };
+  Object.assign(host.style, hostStyle);
+  if (getComputedStyle(host).position !== 'fixed') host.style.position = 'fixed';
 
   let destroyed = false;
   const updateVisibility = () => {
     const hasText = source.textContent !== '' || target.textContent !== '' || status.textContent !== '';
-    host.style.display = hasText && !destroyed ? 'block' : 'none';
+    host.dataset.wantedVisible = hasText && !destroyed ? '1' : '0';
+    if (!hasText || destroyed) {
+      host.style.display = 'none';
+      return;
+    }
+    if (mountedIn === document.body) positionFor();
+    else host.style.display = 'block';
   };
+
+  // 位置跟随（视频滚动/缩放/全屏切换）
+  const syncTimer = window.setInterval(() => {
+    if (destroyed) return;
+    if (host.dataset.wantedVisible === '1') positionFor();
+  }, 400);
+  document.addEventListener('fullscreenchange', positionFor);
+  document.addEventListener('webkitfullscreenchange', positionFor);
+  positionFor();
   updateVisibility();
 
   return {
@@ -82,11 +134,10 @@ export function createCaptionLayer(video: HTMLVideoElement, opts: CaptionLayerOp
     },
     destroy() {
       destroyed = true;
+      window.clearInterval(syncTimer);
+      document.removeEventListener('fullscreenchange', positionFor);
+      document.removeEventListener('webkitfullscreenchange', positionFor);
       host.remove();
-      if (patchedPosition) {
-        parent.style.removeProperty('position');
-        parent.removeAttribute('data-imt-asr-pos');
-      }
     },
   };
 }
