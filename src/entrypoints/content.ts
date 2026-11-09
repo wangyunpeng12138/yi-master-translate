@@ -10,6 +10,7 @@ import { initInputBox, disposeInputBox } from '@/engine/inputbox';
 import { initCircleSelect, disposeCircleSelect } from '@/engine/circleSelect';
 import { initSubtitle, disposeSubtitle } from '@/engine/subtitle';
 import { translateImage } from '@/engine/imageTranslate';
+import { matchSiteRule } from '@/core/rules';
 import '@/engine/content.css';
 
 /**
@@ -178,12 +179,10 @@ async function ensureConfig(): Promise<UserConfig> {
   return config;
 }
 
-function pageLang(): string {
-  return document.documentElement.lang?.split('-')[0]?.toLowerCase() ?? '';
-}
-
-function targetLang(c: UserConfig): string {
-  return c.general.targetLanguage.split('-')[0].toLowerCase();
+/** 站点规则是否禁止翻译标题（X 的标题恒为「X 上的 xxx」） */
+function titleAllowed(): boolean {
+  const rule = matchSiteRule(location.href);
+  return rule?.translateTitle !== false;
 }
 
 async function togglePageTranslation(wholePage = false): Promise<void> {
@@ -224,13 +223,11 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
     return;
   }
 
-  // 同语言检测（仅翻译分支；已翻译页面上的关闭操作不受此拦截）
-  const lang = pageLang();
-  if (c.engine.sameLangCheck && lang && lang === targetLang(c)) {
-    console.info('[imt-rebuild] 页面语言与目标语言相同，跳过翻译');
-    return;
-  }
-
+  // 同语言检测：**不再用 html[lang] 判整页**。
+  // x.com / YouTube 等站点把 html[lang] 设成「界面语言」（跟随账号或 IP），
+  // 用它判定会把英文推文页面误判成「已是中文」→ 一条不翻（2026-11-09 真机实测）。
+  // 改为：段落级用 isSameTargetLang 过滤（walker 内，受 engine.sameLangCheck 控制），
+  // 整页全是目标语言时自然收集到 0 段并在下面早退。
   const paragraphs = collectParagraphs(c, {
     charBudget: wholePage || c.engine.translateWholePage ? 1_000_000 : undefined,
   });
@@ -278,7 +275,7 @@ async function togglePageTranslation(wholePage = false): Promise<void> {
       setFloatBallStatus(hasResult ? 'done' : 'idle');
       return;
     }
-    if (c.engine.translateTitle) void translateTitle(c);
+    if (c.engine.translateTitle && titleAllowed()) void translateTitle(c);
     reportStatus(lastError ? 'error' : 'done');
     setFloatBallStatus(lastError ? 'error' : 'done');
     // 首屏完成后启动滚动增量：剩余段落进入视口前 800px 时自动补翻（边看边译）
@@ -339,11 +336,13 @@ function setupInteractions(c: UserConfig): void {
 function applyInjectedCss(c: UserConfig): void {
   injectedStyleEl?.remove();
   injectedStyleEl = null;
-  if (c.developer.injectedCss?.trim()) {
-    injectedStyleEl = document.createElement('style');
-    injectedStyleEl.textContent = c.developer.injectedCss;
-    document.documentElement.appendChild(injectedStyleEl);
-  }
+  // 站点规则带来的样式修正（如解除 x.com 的 line-clamp 截断）+ 开发者自定义 CSS
+  const ruleCss = matchSiteRule(location.href)?.injectedCss?.join('\n') ?? '';
+  const css = [ruleCss, c.developer.injectedCss ?? ''].filter((s) => s.trim()).join('\n');
+  if (!css) return;
+  injectedStyleEl = document.createElement('style');
+  injectedStyleEl.textContent = css;
+  document.documentElement.appendChild(injectedStyleEl);
 }
 
 function mountBallWhenReady(): void {

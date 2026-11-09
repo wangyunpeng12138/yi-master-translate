@@ -6,6 +6,16 @@
   margin: 0 2px;
 }
 
+/* x.com：推文 / 长文正文是块级容器（div[dir=auto].text-lead，含 whitespace-pre-wrap），
+ * 译文必须独立成行，否则会接在原文同一行末尾，看起来像"没翻译" */
+article div[dir='auto'] .imt-rebuild-target-wrapper,
+[data-testid='tweetText'] .imt-rebuild-target-wrapper,
+[data-testid='UserDescription'] .imt-rebuild-target-wrapper,
+article .x-article-body .imt-rebuild-target-wrapper {
+  display: block;
+  margin: 2px 0 0;
+}
+
 /* 译文起始标识「译」：每段译文第一个字符前的小标签（可配置关闭） */
 .imt-rebuild-trans-mark {
   display: inline-block;

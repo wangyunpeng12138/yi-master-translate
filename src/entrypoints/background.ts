@@ -152,7 +152,11 @@ export default defineBackground(() => {
         return loadUserConfig();
       case 'config:set':
         return (async () => {
-          await saveUserConfig(msg.payload as DeepPartial<UserConfig>);
+          // 协议是 { patch }（见 protocol.ts）。此前把整个 payload 传进 saveUserConfig，
+          // 会往配置里塞一个假的 `patch` 键、真实设置不生效（2026-11-09 实测发现）。
+          const payload = msg.payload as { patch?: DeepPartial<UserConfig> } | undefined;
+          const patch = payload && 'patch' in payload ? payload.patch : (payload as DeepPartial<UserConfig> | undefined);
+          await saveUserConfig(patch ?? {});
           await broadcastConfig();
           return { ok: true as const };
         })();
