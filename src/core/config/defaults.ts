@@ -7,6 +7,7 @@ import type {
   TermLibrary,
   TranslationPosition,
 } from '@/core/shared/types';
+import type { AsrProviderId } from '@/core/asr/types';
 
 /**
  * 默认配置（三层合并的第 1 层）
@@ -100,6 +101,54 @@ export interface UserConfig {
     service: ServiceId; // 字幕专用服务（inherit）
     displayMode: DisplayMode;
     permanentDisable: boolean; // 永久禁用（冲突时）
+  };
+  /**
+   * 无字幕视频 ASR（方案见 docs/ASR字幕接入方案.md）
+   * 产出 cue 数组后走既有字幕翻译管线；本地 Whisper（A2）与云 API（A1）共用同一份配置。
+   */
+  asr: {
+    /** 总开关：默认关闭（会消耗 CPU/带宽，必须用户显式开启） */
+    enabled: boolean;
+    /** 'auto' = 本地就绪优先、否则按 fallbackOrder 找云；'off' = 等同关闭 */
+    provider: 'auto' | 'off' | AsrProviderId;
+    auto: {
+      whenNoTrack: boolean; // 探测到无字幕轨时自动开始（关闭则等手动触发）
+      minWatchSeconds: number; // 播放满 N 秒才开始，避免划走就起任务
+      maxDurationMin: number; // 超过该时长建议改云/整片，默认 15 分钟
+    };
+    /** 音频采集（与 provider 无关：本地/云端都按这个窗口切） */
+    capture: {
+      windowSec: number; // 单个识别窗口时长（默认 30s）
+      strideSec: number; // 相邻窗口重叠，避免切句丢字（默认 5s）
+      captureRate: 1 | 1.5 | 2; // 采集时的播放倍速（2× 更快但掉准确率）
+    };
+    /** 本地 Whisper（A2 落地；A1 只落配置，provider 未注册） */
+    local: {
+      model: 'whisper-tiny' | 'whisper-base' | 'whisper-small';
+      dtype: 'q8' | 'fp16' | 'fp32';
+      numThreads: number;
+      progressive: boolean;
+      modelBaseUrl: string;
+    };
+    /** 云端 ASR */
+    cloud: {
+      provider: AsrProviderId;
+      endpoint: string; // 空 = 用 provider 默认端点
+      apiKey: string; // 实际存 storage.local（见 ASR 方案 §7.2），此处由 storage 注入
+      model: string;
+      language: 'auto' | string;
+      chunkMinutes: number;
+      timeoutMs: number;
+      /** 主 provider 失败后依次尝试 */
+      fallbackOrder: AsrProviderId[];
+    };
+    /** 产出字幕之后的处理（翻译服务/显示模式与 subtitle.* 有意分离） */
+    pipeline: {
+      translate: boolean;
+      service: ServiceId; // 'inherit' = 跟随字幕设置
+      displayMode: 'dual' | 'only' | 'inherit';
+    };
+    cache: { enabled: boolean; ttlDays: number };
   };
   /** 图片/漫画 */
   image: {
@@ -242,6 +291,43 @@ export const DEFAULT_CONFIG: UserConfig = {
     service: 'inherit',
     displayMode: 'dual',
     permanentDisable: false,
+  },
+  asr: {
+    enabled: false,
+    provider: 'auto',
+    auto: {
+      whenNoTrack: true,
+      minWatchSeconds: 10,
+      maxDurationMin: 15,
+    },
+    capture: {
+      windowSec: 30,
+      strideSec: 5,
+      captureRate: 1,
+    },
+    local: {
+      model: 'whisper-base',
+      dtype: 'q8',
+      numThreads: 1,
+      progressive: true,
+      modelBaseUrl: '',
+    },
+    cloud: {
+      provider: 'openai-whisper',
+      endpoint: '',
+      apiKey: '',
+      model: 'whisper-1',
+      language: 'auto',
+      chunkMinutes: 10,
+      timeoutMs: 120_000,
+      fallbackOrder: ['groq-whisper', 'local-whisper'],
+    },
+    pipeline: {
+      translate: true,
+      service: 'inherit',
+      displayMode: 'inherit',
+    },
+    cache: { enabled: true, ttlDays: 30 },
   },
   image: {
     hoverButtonEnabled: false,

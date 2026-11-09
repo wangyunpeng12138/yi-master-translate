@@ -120,6 +120,54 @@ article .x-article-body .imt-rebuild-target-wrapper {
   white-space: pre-wrap;
 }
 
+/* ===== ASR 双语字幕浮层（无字幕轨的视频） =====
+ * 挂在 video.parentElement 内：全屏时只有全屏元素子树里的节点才会显示 */
+.imt-asr-caption-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.imt-asr-caption-window {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 10%;
+  width: 90%;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.imt-asr-source-cue,
+.imt-asr-target-cue,
+.imt-asr-status {
+  white-space: pre-line;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.35;
+  max-width: 100%;
+}
+
+.imt-asr-target-cue {
+  color: #ffe08a;
+}
+
+.imt-asr-status {
+  font-size: 12px;
+  color: #9fe6c0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
 /* ===== 悬浮球 ===== */
 .imt-rebuild-floatball-wrap {
   all: initial;

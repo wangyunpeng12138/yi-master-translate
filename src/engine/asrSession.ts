@@ -1,0 +1,315 @@
+import type { UserConfig } from '@/core/config/defaults';
+import { arrayBufferToBase64, encodeWav, hasUsableAsrProvider, type AsrCue } from '@/core/asr';
+import type { AsrTranscribeResult } from '@/core/messaging/protocol';
+import { AudioTap } from './asrAudioTap';
+import { createCaptionLayer } from './captionLayer';
+import { translateTexts } from './translator';
+
+/**
+ * 无字幕视频的 ASR 会话（A1：云端 provider；本地 Whisper 在 A2 接入同一编排）
+ *
+ * 流程：无字幕轨探测 → AudioTap 采集 16k PCM → 30s 滚动窗口切 WAV →
+ *       background 调 provider 识别 → cue 按窗口偏移拼接 → 批量翻译 → 浮层按时间轴显示
+ *
+ * 与 P8a 的关系：有 `<track>` 的视频一律走 subtitle.ts，本模块只在「无轨」时接管。
+ */
+
+interface SessionItem {
+  start: number;
+  end: number;
+  text: string;
+  translation: string;
+  state: 'pending' | 'translated' | 'error';
+}
+
+export interface AsrSessionHandle {
+  stop(): void;
+  readonly video: HTMLVideoElement;
+}
+
+const sessions = new WeakMap<HTMLVideoElement, AsrSessionHandle>();
+
+export function hasCaptionTrack(video: HTMLVideoElement): boolean {
+  if (video.querySelector('track')) return true;
+  const tracks = video.textTracks;
+  for (let i = 0; i < tracks.length; i++) {
+    const t = tracks[i];
+    if (t.kind !== 'subtitles' && t.kind !== 'captions') continue;
+    // 有轨即可（即使还没加载 cue，站点已有 CC，就不该抢）
+    return true;
+  }
+  return false;
+}
+
+function findSourceIndex(items: SessionItem[], time: number): number {
+  // 字幕通常 1–2 条同时存在，线性扫描足够（window 内最多几十条）
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (time >= it.start && time <= it.end) return i;
+  }
+  return -1;
+}
+
+/** 启动一个视频的 ASR 会话；若该视频已有字幕轨或已在会话中，返回 null */
+export async function startAsrSession(
+  video: HTMLVideoElement,
+  config: UserConfig,
+): Promise<AsrSessionHandle | null> {
+  if (sessions.has(video)) return sessions.get(video) ?? null;
+  if (!config.asr.enabled || !hasUsableAsrProvider(config)) return null;
+  if (hasCaptionTrack(video)) return null;
+  if (video.mediaKeys) {
+    // DRM 内容拿不到音轨（方案 §1.2）
+    console.info('[imt-rebuild] ASR 跳过：受 DRM 保护的视频');
+    return null;
+  }
+  const duration = video.duration;
+  if (Number.isFinite(duration) && duration > config.asr.auto.maxDurationMin * 60) {
+    console.info('[imt-rebuild] ASR 跳过：视频超过设定时长上限');
+    return null;
+  }
+
+  const sampleRate = 16_000;
+  const layer = createCaptionLayer(video);
+  const items: SessionItem[] = [];
+  const pending = new Set<string>();
+  let stopped = false;
+  let tap: AudioTap | null = null;
+  let buffer: Float32Array = new Float32Array(0);
+  let consumedSamples = 0;
+  let inFlight = false;
+  let lastShownIndex = -1;
+  let rafId = 0;
+
+  /** 先占位再 await：否则两次并发调用（play 事件 + 初始扫描）会各建一套采集与浮层 */
+  const stopNow = () => {
+    if (stopped) return;
+    stopped = true;
+    cancelAnimationFrame(rafId);
+    tap?.stop();
+    layer.destroy();
+    sessions.delete(video);
+  };
+  const handle: AsrSessionHandle = { stop: stopNow, video };
+  sessions.set(video, handle);
+
+  const winSamples = Math.max(1, Math.round(config.asr.capture.windowSec * sampleRate));
+  const strideSamples = Math.max(0, Math.round(config.asr.capture.strideSec * sampleRate));
+
+  const setBusyStatus = (text: string | null) => layer.setStatus(text);
+
+  const render = () => {
+    if (stopped) return;
+    rafId = requestAnimationFrame(render);
+    const time = video.currentTime;
+    const idx = findSourceIndex(items, time);
+    if (idx === lastShownIndex) return;
+    lastShownIndex = idx;
+    if (idx < 0) {
+      layer.hide();
+      return;
+    }
+    const it = items[idx];
+    layer.setStatus(null);
+    layer.show(it.text, it.translation);
+    if (it.state === 'pending') layer.setStatus('翻译中…');
+  };
+
+  /** 把一批识别结果并入 items，并按需翻译 */
+  const ingest = async (cues: AsrCue[]) => {
+    const fresh: SessionItem[] = [];
+    for (const c of cues) {
+      const text = c.text.trim();
+      if (!text) continue;
+      // 重叠窗口会产生重复 cue：同文本且时间接近的丢弃
+      const dup = items.some((it) => it.text === text && Math.abs(it.start - c.start) < 1.5);
+      if (dup) continue;
+      if (pending.has(text)) continue;
+      const item: SessionItem = {
+        start: c.start,
+        end: Math.max(c.end, c.start + 0.4),
+        text,
+        translation: '',
+        state: 'pending',
+      };
+      items.push(item);
+      fresh.push(item);
+      pending.add(text);
+    }
+    if (fresh.length === 0) return;
+    items.sort((a, b) => a.start - b.start);
+
+    if (!config.asr.pipeline.translate) {
+      fresh.forEach((it) => {
+        it.state = 'translated';
+        pending.delete(it.text);
+      });
+      return;
+    }
+
+    try {
+      const service =
+        config.asr.pipeline.service && config.asr.pipeline.service !== 'inherit'
+          ? config.asr.pipeline.service
+          : config.subtitle.service;
+      const translations = await translateTexts(
+        fresh.map((it) => it.text),
+        'auto',
+        config.general.targetLanguage,
+        service,
+        'subtitle',
+      );
+      fresh.forEach((it, i) => {
+        it.translation = (translations[i] ?? '').trim();
+        it.state = it.translation ? 'translated' : 'error';
+        pending.delete(it.text);
+      });
+    } catch (e) {
+      fresh.forEach((it) => {
+        it.state = 'error';
+        pending.delete(it.text);
+      });
+      console.warn('[imt-rebuild] ASR 字幕翻译失败：', e);
+    }
+  };
+
+  /** 发送一个窗口去识别 */
+  const flushWindow = async (pcm: Float32Array, offsetSec: number) => {
+    if (inFlight || stopped) return;
+    inFlight = true;
+    setBusyStatus('识别中…');
+    try {
+      const wav = encodeWav(pcm, sampleRate);
+      const res = (await browser.runtime.sendMessage({
+        type: 'asr:transcribe',
+        payload: {
+          wavBase64: arrayBufferToBase64(wav),
+          offsetSec,
+          durationSec: pcm.length / sampleRate,
+          language: config.asr.cloud.language,
+        },
+      })) as AsrTranscribeResult;
+      if (stopped) return;
+      if (!res || res.ok !== true) {
+        const message = res && res.ok === false ? res.message : 'ASR 无响应';
+        setBusyStatus(`识别失败：${message}`);
+        console.warn('[imt-rebuild] ASR 失败：', res);
+        return;
+      }
+      setBusyStatus(null);
+      await ingest(res.cues);
+    } catch (e) {
+      if (!stopped) setBusyStatus(`识别失败：${(e as Error).message}`);
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  const onPcm = (chunk: Float32Array) => {
+    if (stopped) return;
+    const merged = new Float32Array(buffer.length + chunk.length);
+    merged.set(buffer, 0);
+    merged.set(chunk, buffer.length);
+    buffer = merged;
+
+    while (buffer.length >= winSamples) {
+      const slice = buffer.slice(0, winSamples);
+      const offsetSec = consumedSamples / sampleRate;
+      consumedSamples += winSamples - strideSamples;
+      buffer = buffer.slice(winSamples - strideSamples);
+      void flushWindow(slice, offsetSec);
+      if (inFlight) break; // 单飞：识别没回来之前不堆窗口
+    }
+
+    // 长时间拿到全零 → 判定被污染/静音，给出一次提示后停止采集
+    if (tap && tap.totalSamples > sampleRate * 8 && tap.peakAmplitude < 1e-4) {
+      setBusyStatus('没有采集到声音（可能被站点静音或跨域限制）');
+      stopNow();
+    }
+  };
+
+  try {
+    tap = await AudioTap.attach(video, { sampleRate, onPcm });
+  } catch (e) {
+    layer.setStatus(`无法采集音频：${(e as Error).message}`);
+    layer.destroy();
+    sessions.delete(video);
+    return null;
+  }
+
+  setBusyStatus('正在识别音频…');
+  rafId = requestAnimationFrame(render);
+
+  // 自动播放策略：AudioContext 可能一直是 suspended（拿不到任何样本）。
+  // 一次点击即可解锁；同时给一句提示，避免用户以为功能坏了。
+  const unlockOnClick = () => void tap?.resume();
+  document.addEventListener('click', unlockOnClick, { once: true });
+  const stallTimer = window.setTimeout(() => {
+    if (stopped) return;
+    if (tap && tap.totalSamples === 0) {
+      setBusyStatus('等待音频…点击视频任意位置以开始识别');
+    }
+  }, 4000);
+
+  const stopWithTimers = () => {
+    window.clearTimeout(stallTimer);
+    document.removeEventListener('click', unlockOnClick);
+    stopNow();
+  };
+  // 覆盖 handle.stop（外部调用时也要清掉定时器与监听）
+  handle.stop = stopWithTimers;
+
+  return handle;
+}
+
+/** 页面级：为所有符合条件的 video 建立 ASR 会话（幂等） */
+export async function scanAndStartAsr(config: UserConfig): Promise<void> {
+  if (!config.asr.enabled || !config.asr.auto.whenNoTrack) return;
+  const videos = [...document.querySelectorAll('video')] as HTMLVideoElement[];
+  for (const video of videos) {
+    if (sessions.has(video)) continue;
+    if (video.paused) continue;
+    if (hasCaptionTrack(video)) continue;
+    void startAsrSession(video, config);
+  }
+}
+
+/** 停止全部会话（关闭翻译 / 配置变更 / 页面卸载） */
+export function stopAllAsrSessions(): void {
+  document.querySelectorAll('video').forEach((v) => {
+    sessions.get(v as HTMLVideoElement)?.stop();
+  });
+}
+
+export function initAsr(config: UserConfig): void {
+  if (!config.asr.enabled) return;
+  // 播放是用户手势后的信号：此时建立 AudioContext 不会被打成 suspended
+  document.addEventListener(
+    'play',
+    (e) => {
+      const video = e.target as HTMLVideoElement;
+      if (video?.tagName !== 'VIDEO') return;
+      const waited = Number(video.dataset.imtAsrWaited ?? 0);
+      if (waited >= config.asr.auto.minWatchSeconds) {
+        void startAsrSession(video, config);
+        return;
+      }
+      const timer = window.setInterval(() => {
+        const now = Number(video.dataset.imtAsrWaited ?? 0) + 1;
+        video.dataset.imtAsrWaited = String(now);
+        if (video.paused || video.ended) {
+          window.clearInterval(timer);
+          return;
+        }
+        if (now >= config.asr.auto.minWatchSeconds) {
+          window.clearInterval(timer);
+          void startAsrSession(video, config);
+        }
+      }, 1000);
+    },
+    true,
+  );
+
+  // 初始化时已在播放的视频（多为自动播放静音流）也尝试接管
+  void scanAndStartAsr(config);
+}

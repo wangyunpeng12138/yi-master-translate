@@ -11,6 +11,7 @@ import { initCircleSelect, disposeCircleSelect } from '@/engine/circleSelect';
 import { initSubtitle, disposeSubtitle } from '@/engine/subtitle';
 import { translateImage } from '@/engine/imageTranslate';
 import { matchSiteRule } from '@/core/rules';
+import { initAsr, stopAllAsrSessions } from '@/engine/asrSession';
 import '@/engine/content.css';
 
 /**
@@ -321,6 +322,7 @@ function disposeInteractions(): void {
   disposeInputBox();
   disposeCircleSelect();
   disposeSubtitle();
+  stopAllAsrSessions();
 }
 
 function setupInteractions(c: UserConfig): void {
@@ -330,6 +332,7 @@ function setupInteractions(c: UserConfig): void {
   initInputBox(c);
   initCircleSelect(c);
   initSubtitle(c);
+  initAsr(c); // 无字幕视频的语音识别（ASR 方案 A1）
   applyInjectedCss(c);
 }
 

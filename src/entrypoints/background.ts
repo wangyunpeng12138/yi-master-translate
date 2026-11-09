@@ -9,6 +9,19 @@ import { applyProxySettings, applyLocalServiceDnr } from '@/core/services/proxy'
 import { buildExplainExport, clearExplainCache, explainParagraph } from '@/core/services/explain';
 import { searchSelection } from '@/core/services/selectionSearch';
 import type { TranslateRequest } from '@/core/shared/types';
+import {
+  AsrError,
+  audioFingerprint,
+  asrCacheKey,
+  base64ToArrayBuffer,
+  clearAsrCache,
+  createAsrProvider,
+  encodeWav,
+  getAsrCache,
+  getAsrChain,
+  setAsrCache,
+} from '@/core/asr';
+import type { AsrProviderId } from '@/core/asr';
 
 /**
  * 后台 Service Worker（P2：配置中心 + 翻译调度 + 命令分发）
@@ -34,6 +47,20 @@ const storageArea = {
     return stored as Record<string, string>;
   },
   set: async (entries: Record<string, string>) => {
+    await browser.storage.local.set(entries);
+  },
+  remove: async (keys: string[]) => {
+    await browser.storage.local.remove(keys);
+  },
+};
+
+/** ASR 缓存区（值是 cue 对象而非字符串，单独一份以免污染 explain 的 string 契约） */
+const asrStorageArea = {
+  get: async (keys: string[] | null) => {
+    const stored = await browser.storage.local.get(keys as string[] | null);
+    return stored as Record<string, unknown>;
+  },
+  set: async (entries: Record<string, unknown>) => {
     await browser.storage.local.set(entries);
   },
   remove: async (keys: string[]) => {
@@ -193,6 +220,111 @@ export default defineBackground(() => {
           );
           return { texts };
         })();
+      /* ---------- ASR：无字幕视频语音识别（方案见 docs/ASR字幕接入方案.md） ---------- */
+      case 'asr:transcribe': {
+        return (async () => {
+          const payload = msg.payload as {
+            wavBase64?: string;
+            offsetSec?: number;
+            durationSec?: number;
+            language?: string;
+          };
+          if (!payload?.wavBase64) {
+            return { ok: false as const, code: 'bad-request', message: 'asr:transcribe 缺少音频数据' };
+          }
+          const cfg = await loadUserConfig();
+          if (!cfg.asr.enabled) {
+            return { ok: false as const, code: 'disabled', message: 'ASR 未启用（设置页 → 视频字幕）' };
+          }
+          const chain = getAsrChain(cfg);
+          if (chain.length === 0) {
+            return { ok: false as const, code: 'no-provider', message: '未配置可用的 ASR 服务' };
+          }
+          const wav = base64ToArrayBuffer(payload.wavBase64);
+          const lang = payload.language || cfg.asr.cloud.language || 'auto';
+          const offsetSec = Number(payload.offsetSec ?? 0);
+          const durationSec = Number(payload.durationSec ?? 0);
+          const fingerprint = audioFingerprint(wav);
+
+          let lastError: Error | null = null;
+          for (const id of chain) {
+            const key = asrCacheKey(id, lang, fingerprint);
+            if (cfg.asr.cache.enabled) {
+              const hit = await getAsrCache(asrStorageArea, key, cfg.asr.cache.ttlDays).catch(() => null);
+              // 缓存存的是**相对音频起点**的 cue，这里再叠加窗口偏移
+              if (hit?.cues?.length) {
+                return {
+                  ok: true as const,
+                  provider: id,
+                  cached: true,
+                  cues: hit.cues.map((c) => ({ ...c, start: c.start + offsetSec, end: c.end + offsetSec })),
+                };
+              }
+            }
+            try {
+              const provider = createAsrProvider(cfg, id);
+              const cues = await provider.transcribe({ wav, offsetSec, durationSec, language: lang });
+              if (cfg.asr.cache.enabled && cues.length > 0) {
+                await setAsrCache(asrStorageArea, key, {
+                  cues, // 相对时间轴
+                  createdAt: Date.now(),
+                  provider: id,
+                  lang,
+                }).catch(() => undefined);
+              }
+              return {
+                ok: true as const,
+                provider: id,
+                cached: false,
+                cues: cues.map((c) => ({ ...c, start: c.start + offsetSec, end: c.end + offsetSec })),
+              };
+            } catch (e) {
+              lastError = e as Error;
+              if ((e as AsrError)?.code === 'aborted') {
+                return { ok: false as const, code: 'aborted', message: (e as Error).message };
+              }
+              console.warn(`[imt-rebuild] ASR provider ${id} 失败，尝试下一个：`, (e as Error).message);
+            }
+          }
+          const err = lastError as AsrError | null;
+          return { ok: false as const, code: err?.code ?? 'unknown', message: err?.message ?? 'ASR 全部失败' };
+        })();
+      }
+      case 'asr:test': {
+        // 自检：0.3s 静音 WAV 打一次真实请求，只验证「通不通」
+        return (async () => {
+          const cfg = await loadUserConfig();
+          const wanted = (msg.payload as { provider?: string } | undefined)?.provider ?? 'auto';
+          const chain =
+            wanted === 'auto'
+              ? getAsrChain({ ...cfg, asr: { ...cfg.asr, enabled: true } })
+              : [wanted as AsrProviderId];
+          if (chain.length === 0) {
+            return { ok: false as const, code: 'no-provider', message: '未配置可用的 ASR 服务' };
+          }
+          const id = chain[0];
+          const started = Date.now();
+          try {
+            const provider = createAsrProvider(cfg, id);
+            const cues = await provider.transcribe({
+              wav: encodeWav(new Float32Array(16_000 * 0.3)),
+              offsetSec: 0,
+              durationSec: 0.3,
+              language: cfg.asr.cloud.language || 'auto',
+            });
+            return { ok: true as const, provider: id, ms: Date.now() - started, cueCount: cues.length };
+          } catch (e) {
+            return {
+              ok: false as const,
+              code: (e as AsrError)?.code ?? 'unknown',
+              message: (e as Error).message,
+            };
+          }
+        })();
+      }
+      case 'asr:cache:clear': {
+        return (async () => ({ removed: await clearAsrCache(asrStorageArea) }))();
+      }
       case 'explain:paragraph': {
         // 段落术语解释（AI 搜索）：缓存命中直接返回，否则调 AI 并写缓存
         return (async () => {
