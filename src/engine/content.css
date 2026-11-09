@@ -162,6 +162,11 @@ article .x-article-body .imt-rebuild-target-wrapper {
   color: #ffe08a;
 }
 
+/* 译文在原文上方：用列反转，保持 DOM 顺序不变（便于统一渲染逻辑） */
+.imt-asr-caption-window.imt-asr-pos-above {
+  flex-direction: column-reverse;
+}
+
 .imt-asr-status {
   font-size: 12px;
   color: #9fe6c0;

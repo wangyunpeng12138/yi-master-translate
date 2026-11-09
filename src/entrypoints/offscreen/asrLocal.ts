@@ -109,9 +109,46 @@ export async function downloadModel(
 export function modelStatus(model: string): LocalModelInfo {
   const known = state.get(model);
   if (known) return known;
-  // 未在本进程加载过：只有当前管线正好是它才算 ready
   if (currentPipe?.model === model) return { status: 'ready' };
   return { status: 'absent' };
+}
+
+/** dtype 对应的 ONNX 文件名后缀（transformers.js 的命名约定） */
+function dtypeSuffix(dtype: string): string {
+  if (dtype === 'q8') return '_quantized';
+  if (dtype === 'fp16') return '_fp16';
+  return '';
+}
+
+/**
+ * 查磁盘缓存判断模型是否已下载。
+ * 必要性：offscreen 每次浏览器启动都是新进程，内存里的 state 会丢；
+ * 只看内存会把"已下载到 CacheStorage 的模型"误判为未下载，从而回退云端（实测踩过）。
+ */
+export async function checkModelCached(
+  model: string,
+  dtype = 'q8',
+  baseUrl = '',
+  revision = '',
+): Promise<LocalModelInfo> {
+  const memory = modelStatus(model);
+  if (memory.status === 'ready') return memory;
+  try {
+    if (typeof caches === 'undefined') return memory;
+    const host = (baseUrl || env.remoteHost || 'https://huggingface.co').replace(/\/+$/, '');
+    const rev = revision?.trim() || engineRevision || 'main';
+    const url = `${host}/${modelId(model)}/resolve/${rev}/onnx/encoder_model${dtypeSuffix(dtype)}.onnx`;
+    const cache = await caches.open('transformers-cache');
+    const hit = await cache.match(url);
+    if (hit) {
+      const ready: LocalModelInfo = { status: 'ready', ratio: 1 };
+      state.set(model, ready);
+      return ready;
+    }
+  } catch {
+    /* CacheStorage 不可用/键不匹配时按未下载处理 */
+  }
+  return memory;
 }
 
 /** 删除模型缓存（CacheStorage 里该模型的所有文件） */

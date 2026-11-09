@@ -1021,7 +1021,29 @@ http.createServer(async (req, res) => {
 
 即：**模型下载（ModelScope）→ ORT wasm 编译 → 本地推理 → cue 解析 → 翻译 → 双语浮层** 全链路打通，全程零云端请求。
 
-### 14.3 待办（A3 起）
+### 14.3 播放器 CC 按钮 + 单视频开关（2026-11-09 追加，已验证）
+
+参考实现是在播放器控制条插「译」按钮（`quickButtonRule`）。本工程实现为**浮层芯片 + Shadow DOM 面板**：
+
+| 能力 | 实现 |
+| --- | --- |
+| 按钮位置 | 锚点链：**音量按钮之后**（`aria-label` 含 静音/音量/mute/volume、`.vjs-mute-control`、`.ytp-mute-button`）→ 否则插到 **设置/全屏簇最左**（x.com 新播放器无独立音量按钮） |
+| 形态 | `position:fixed` 浮层芯片（28×24，"CC"），**跟随**锚点按钮位置（400ms 同步一次） |
+| 为什么不用插进控制条 | 站点控制条容器常带 `pointer-events:none`，且上面压着渐变/scrim 覆盖层。实测 x.com：插进 DOM 后 `elementFromPoint` 命中的是站点层，**鼠标点不到**（程序化 `.click()` 却能点）→ 改浮层后 `hitOurs=true` |
+| 面板 | Shadow DOM（样式隔离，不写 `!important` 全局 CSS），6 行对齐参考截图：<br>1. **此视频字幕**（开关，控制该视频的字幕加载与翻译）<br>2. 字幕显示类型（双语/仅译文）<br>3. 译文位置（原文下方/上方）<br>4. 字幕样式 → 设置页 `#subtitle`<br>5. 不再显示该快捷方式（写入站点黑名单）<br>6. 更多功能 → 设置页 |
+| 单视频开关语义 | 开：有 `<track>` → 重建双语 VTT；无轨 → 起 ASR 会话（本地/云端按配置）。关：停 ASR + 还原 track 原始 src + 置 `mode=disabled` |
+| 相关配置 | `subtitle.showPlayerShortcut`（总开关）、`subtitle.hiddenShortcutHosts`（站点黑名单）、`subtitle.translationPosition`、`subtitle.displayMode` |
+
+**落地时修掉的两个 bug**：
+
+1. `asr.auto.whenNoTrack` 关闭时，播放仍会自动起 ASR（`initAsr` 的 play 监听没看该开关）→ 已修
+2. 芯片/面板点击带 `stopPropagation`，挡住了 AudioContext 的解锁监听 → 一直停在"等待音频…"。
+   改为 `pointerdown` **捕获阶段**监听后正常
+
+**真机验证（x.com 无字幕视频）**：芯片出现在控制条（时间右侧、齿轮左侧）→ 点开面板 6 行齐全 → 开关从「已关闭」切到「语音识别中」→ 浮层出双语字幕 →
+再次点开关立即隐藏字幕并还原。
+
+### 14.4 待办（A3 起）
 
 - **A2**：本地 Whisper（transformers.js + 模型下载/管理 + 单线程推理），注册进 `registry.ts` 的 `IMPLEMENTED`
 - **A3**：无轨提示条、播放器「译」按钮（手动触发）、`tiny→base` 渐进替换、AudioWorklet 替代 ScriptProcessor

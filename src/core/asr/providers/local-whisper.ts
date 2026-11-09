@@ -39,9 +39,16 @@ async function askOffscreen<T>(type: string, payload: unknown, retries = 3): Pro
 export async function localModelStatus(
   config: UserConfig,
   model = config.asr.local.model,
+  dtype = config.asr.local.dtype,
 ): Promise<LocalModelState> {
   try {
-    return await askOffscreen<LocalModelState>('asr:local:model', { action: 'status', model });
+    return await askOffscreen<LocalModelState>('asr:local:model', {
+      action: 'status',
+      model,
+      dtype,
+      modelBaseUrl: config.asr.local.modelBaseUrl,
+      modelRevision: config.asr.local.modelRevision,
+    });
   } catch {
     return { status: 'absent' };
   }

@@ -89,22 +89,27 @@ export async function startAsrSession(
   video: HTMLVideoElement,
   config: UserConfig,
 ): Promise<AsrSessionHandle | null> {
+  const skip = (reason: string): null => {
+    console.info(`[imt-rebuild] ASR 未启动：${reason}`);
+    return null;
+  };
   if (sessions.has(video)) return sessions.get(video) ?? null;
-  if (!config.asr.enabled || !hasUsableAsrProvider(config)) return null;
-  if (hasCaptionTrack(video)) return null;
+  if (!config.asr.enabled) return skip('asr.enabled=false');
+  if (!hasUsableAsrProvider(config)) return skip('没有可用的 ASR provider（检查 provider/fallbackOrder）');
+  if (hasCaptionTrack(video)) return skip('该视频已有字幕轨，走轨道翻译');
   if (video.mediaKeys) {
     // DRM 内容拿不到音轨（方案 §1.2）
-    console.info('[imt-rebuild] ASR 跳过：受 DRM 保护的视频');
-    return null;
+    return skip('受 DRM 保护的视频');
   }
   const duration = video.duration;
   if (Number.isFinite(duration) && duration > config.asr.auto.maxDurationMin * 60) {
-    console.info('[imt-rebuild] ASR 跳过：视频超过设定时长上限');
-    return null;
+    return skip(`视频时长超过上限（${Math.round(duration)}s）`);
   }
 
   const sampleRate = 16_000;
-  const layer = createCaptionLayer(video);
+  const layer = createCaptionLayer(video, {
+    translationPosition: config.subtitle.translationPosition,
+  });
   const items: SessionItem[] = [];
   const pending = new Set<string>();
   let stopped = false;
@@ -282,9 +287,10 @@ export async function startAsrSession(
   rafId = requestAnimationFrame(render);
 
   // 自动播放策略：AudioContext 可能一直是 suspended（拿不到任何样本）。
-  // 一次点击即可解锁；同时给一句提示，避免用户以为功能坏了。
+  // 一次点击即可解锁；用 **捕获阶段** 监听，避免被上层 UI（播放器 CC 芯片等）
+  // 的 stopPropagation 挡掉（实测：点芯片开字幕时一直停在"等待音频"）。
   const unlockOnClick = () => void tap?.resume();
-  document.addEventListener('click', unlockOnClick, { once: true });
+  document.addEventListener('pointerdown', unlockOnClick, { capture: true, once: true });
   const stallTimer = window.setTimeout(() => {
     if (stopped) return;
     if (tap && tap.totalSamples === 0) {
@@ -294,7 +300,7 @@ export async function startAsrSession(
 
   const stopWithTimers = () => {
     window.clearTimeout(stallTimer);
-    document.removeEventListener('click', unlockOnClick);
+    document.removeEventListener('pointerdown', unlockOnClick, true);
     stopNow();
   };
   // 覆盖 handle.stop（外部调用时也要清掉定时器与监听）
@@ -322,8 +328,21 @@ export function stopAllAsrSessions(): void {
   });
 }
 
+/** 该视频是否已有 ASR 会话在跑（播放器按钮判断状态用） */
+export function hasAsrSession(video: HTMLVideoElement): boolean {
+  return sessions.has(video);
+}
+
+/** 停止某个视频的 ASR 会话（播放器按钮"关闭字幕"用） */
+export function stopAsrSession(video: HTMLVideoElement): void {
+  sessions.get(video)?.stop();
+  sessions.delete(video);
+}
+
 export function initAsr(config: UserConfig): void {
   if (!config.asr.enabled) return;
+  // 「检测到无字幕时自动识别」关闭时，播放不再自动起任务（只能从播放器 CC 按钮手动开）
+  if (!config.asr.auto.whenNoTrack) return;
   // 播放是用户手势后的信号：此时建立 AudioContext 不会被打成 suspended
   document.addEventListener(
     'play',

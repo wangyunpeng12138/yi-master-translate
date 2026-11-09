@@ -1,12 +1,16 @@
 import type { UserConfig } from '@/core/config/defaults';
 import { normalizeText } from '@/core/shared/utils';
 import { translateTexts } from './translator';
+import { hasAsrSession, startAsrSession, stopAsrSession } from './asrSession';
 
 /**
- * 视频字幕引擎（P8a 基础版：track 拦截方案）
- * 流程：扫描页面 <video> 的 <track> → fetch vtt → 解析 cue → 批量翻译 →
- *       重建双语 vtt（原文\n译文 / 仅译文）→ blob URL 替换 → showing
- * 范围：仅已有字幕轨的视频；无字幕 ASR 已裁剪（见实现方案 §1.2）。
+ * 视频字幕引擎（P8a：track 拦截方案）+ 单视频开关（播放器 CC 按钮用）
+ *
+ * 两条来源：
+ * 1. 站点自带字幕轨（`<track>` 或播放器建的 TextTrack）→ 抓 VTT → 翻译 → 重建双语 VTT
+ * 2. 无字幕轨（ASR）→ 交给 asrSession（本地 Whisper / 云端）
+ *
+ * 本文件对外提供「按视频启停」的能力，供播放器快捷按钮调用。
  */
 
 let config: UserConfig | null = null;
@@ -43,6 +47,18 @@ function scan(): void {
   });
 }
 
+/** 该 video 是否已有字幕轨（<track> 或播放器自建的 subtitles/captions 轨） */
+export function hasCaptionTrackIn(video: HTMLVideoElement): boolean {
+  if (video.querySelector('track')) return true;
+  const tracks = video.textTracks;
+  for (let i = 0; i < tracks.length; i++) {
+    const t = tracks[i];
+    if (t.kind === 'subtitles' || t.kind === 'captions') return true;
+  }
+  return false;
+}
+
+/** 把双语版写回 track（`data-imt-orig-src` 保留原地址，便于开关还原） */
 async function processTrack(track: HTMLTrackElement): Promise<void> {
   const c = config;
   if (!c) return;
@@ -75,15 +91,33 @@ async function processTrack(track: HTMLTrackElement): Promise<void> {
     const output = rebuildVtt(cues, map, c);
     const blob = new Blob([output], { type: 'text/vtt' });
     const url = URL.createObjectURL(blob);
+    if (!track.dataset.imtOrigSrc) track.dataset.imtOrigSrc = track.getAttribute('src') ?? '';
     track.src = url;
     // 展示翻译后的轨道
     requestAnimationFrame(() => {
       try {
         track.track.mode = 'showing';
-      } catch { /* track 未加载完成时忽略 */ }
+      } catch {
+        /* track 未加载完成时忽略 */
+      }
     });
   } catch (e) {
     console.warn('[imt-rebuild] subtitle translate failed:', e);
+  }
+}
+
+/** 还原单条 track（关闭该视频的字幕时用） */
+function restoreTrack(track: HTMLTrackElement): void {
+  const orig = track.dataset.imtOrigSrc;
+  if (orig) {
+    track.src = orig;
+    delete track.dataset.imtOrigSrc;
+  }
+  delete track.dataset.imtRebuild;
+  try {
+    track.track.mode = 'disabled';
+  } catch {
+    /* 忽略 */
   }
 }
 
@@ -121,4 +155,65 @@ function rebuildVtt(cues: VttCue[], map: Map<string, string>, c: UserConfig): st
     out.push(`${cue.start} --> ${cue.end}`, body, '');
   }
   return out.join('\n');
+}
+
+/* ---------------- 单视频开关（播放器快捷按钮调用） ---------------- */
+
+export interface VideoSubtitleState {
+  /** 该视频当前是否有字幕在工作（轨道双语 或 ASR 会话） */
+  active: boolean;
+  /** 字幕来源：track = 站点字幕轨；asr = 语音识别 */
+  source: 'track' | 'asr' | 'none';
+}
+
+export function getVideoSubtitleState(video: HTMLVideoElement): VideoSubtitleState {
+  if (hasAsrSession(video)) return { active: true, source: 'asr' };
+  const rebuilt = [...video.querySelectorAll('track')].some(
+    (t) => (t as HTMLTrackElement).dataset.imtRebuild === 'done',
+  );
+  if (rebuilt) return { active: true, source: 'track' };
+  return { active: false, source: 'none' };
+}
+
+/** 打开该视频的字幕（有轨走轨道翻译，无轨走 ASR） */
+export async function enableVideoSubtitle(video: HTMLVideoElement, c: UserConfig): Promise<void> {
+  config = c;
+  if (hasCaptionTrackIn(video)) {
+    const tracks = [...video.querySelectorAll('track')] as HTMLTrackElement[];
+    if (tracks.length > 0) {
+      await Promise.all(tracks.map((t) => processTrack(t)));
+      return;
+    }
+    // 播放器自建 TextTrack（无 <track> 元素）：显示原轨即可，双语需走 ASR 之外的通道（A4）
+    const textTracks = video.textTracks;
+    for (let i = 0; i < textTracks.length; i++) {
+      const t = textTracks[i];
+      if (t.kind === 'subtitles' || t.kind === 'captions') {
+        try {
+          t.mode = 'showing';
+        } catch {
+          /* 忽略 */
+        }
+      }
+    }
+    return;
+  }
+  await startAsrSession(video, c);
+}
+
+/** 关闭该视频的字幕 */
+export function disableVideoSubtitle(video: HTMLVideoElement): void {
+  stopAsrSession(video);
+  video.querySelectorAll('track').forEach((t) => restoreTrack(t as HTMLTrackElement));
+  const textTracks = video.textTracks;
+  for (let i = 0; i < textTracks.length; i++) {
+    const t = textTracks[i];
+    if (t.kind === 'subtitles' || t.kind === 'captions') {
+      try {
+        t.mode = 'disabled';
+      } catch {
+        /* 忽略 */
+      }
+    }
+  }
 }

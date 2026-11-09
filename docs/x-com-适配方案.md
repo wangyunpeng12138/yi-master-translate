@@ -600,15 +600,15 @@ function writeNativeTrack(video: HTMLVideoElement, label: string, lang: string, 
 ```
 注意：原生通道样式能力极弱（只能 `::cue { color/background }`，且不能双语不同字号），所以只作降级。
 
-### 5.5 播放器快捷入口（可选，P3）
+### 5.5 播放器快捷入口（✅ 已实现，2026-11-09）
 
-原版在播放器控制条插一个"译"按钮（`quickButtonRules`），x.com 锚点已给出：`button[data-testid="captions"]`（先祖轴）。我们 P1 先用：
+原版在播放器控制条插一个"译"按钮（`quickButtonRules`），x.com 锚点已给出：`button[data-testid="captions"]`（先祖轴）。但**当前渲染器没有 `data-testid`**（§10.7），因此本工程改为：
 
-```ts
-const ccBtn = document.querySelector('button[data-testid="captions"]');
-const host = ccBtn?.parentElement?.parentElement; // X 的按钮组
-```
-插入一个 24×24 的按钮，`pointer-events:auto`，`z-index` 高于控制条；点击 = 开/关双语字幕（并把玩家 CC 一起打开）。若锚点失效，整个快捷入口静默不出现（不阻塞主功能）。
+- **锚点链**：音量按钮（`aria-label*=静音/音量/mute/volume`、`.vjs-mute-control`、`.ytp-mute-button`）→ 兜底「设置/全屏/字幕」按钮所在簇的最左
+- **浮层芯片**：`position:fixed` 的 "CC" 芯片跟随锚点位置（**不能直接插进控制条**：容器 `pointer-events:none` + 覆盖层会导致鼠标点不到，实测见 ASR 方案 §14.3）
+- **面板**：Shadow DOM，含「此视频字幕」开关（有轨走轨道翻译、无轨起 ASR）、显示类型、译文位置、字幕样式、不再显示该快捷方式、更多功能
+
+细节与验证见 [ASR字幕接入方案.md](./ASR字幕接入方案.md) §14.3。
 
 ### 5.6 X Live / 广播页（DOM 字幕通道）
 

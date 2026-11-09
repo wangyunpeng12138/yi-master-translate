@@ -175,8 +175,18 @@ async function clearCache() {
       <el-switch :model-value="store.config.subtitle.enabled" @update:model-value="store.patch({ subtitle: { enabled: $event } })" />
     </SettingRow>
 
-    <SettingRow title="在播放器显示双语字幕快捷方式" desc="播放器右下角快捷开关（修改后刷新视频网页生效）">
+    <SettingRow title="在播放器显示双语字幕快捷方式" desc="播放器控制条上的「CC」按钮：点开可单独开关该视频的字幕（修改后刷新视频网页生效）">
       <el-switch :model-value="store.config.subtitle.showPlayerShortcut" @update:model-value="store.patch({ subtitle: { showPlayerShortcut: $event } })" />
+    </SettingRow>
+
+    <SettingRow title="字幕译文位置" desc="播放器快捷面板里也可以改">
+      <el-radio-group
+        :model-value="store.config.subtitle.translationPosition"
+        @update:model-value="store.patch({ subtitle: { translationPosition: $event } })"
+      >
+        <el-radio-button value="below" label="原文下方" />
+        <el-radio-button value="above" label="原文上方" />
+      </el-radio-group>
     </SettingRow>
 
     <h3>YouTube 专属设置</h3>

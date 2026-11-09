@@ -25,7 +25,12 @@ export interface CaptionLayerHandle {
   readonly visible: boolean;
 }
 
-export function createCaptionLayer(video: HTMLVideoElement): CaptionLayerHandle {
+export interface CaptionLayerOptions {
+  /** 译文位置：below = 原文下方（默认），above = 原文上方 */
+  translationPosition?: 'below' | 'above';
+}
+
+export function createCaptionLayer(video: HTMLVideoElement, opts: CaptionLayerOptions = {}): CaptionLayerHandle {
   const parent = video.parentElement ?? document.body;
   // 浮层绝对定位需要父容器是定位上下文；静态的话我们临时改成 relative 并记下来
   const patchedPosition = getComputedStyle(parent).position === 'static';
@@ -37,7 +42,7 @@ export function createCaptionLayer(video: HTMLVideoElement): CaptionLayerHandle 
   const host = document.createElement('div');
   host.className = HOST_CLASS;
   const win = document.createElement('div');
-  win.className = WINDOW_CLASS;
+  win.className = `${WINDOW_CLASS}${opts.translationPosition === 'above' ? ' imt-asr-pos-above' : ''}`;
   const source = document.createElement('span');
   source.className = 'imt-asr-source-cue';
   const target = document.createElement('span');

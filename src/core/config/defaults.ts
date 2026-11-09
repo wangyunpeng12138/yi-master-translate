@@ -100,6 +100,10 @@ export interface UserConfig {
     focusDialogue: boolean; // 滤除环境声标注
     service: ServiceId; // 字幕专用服务（inherit）
     displayMode: DisplayMode;
+    /** 字幕译文位置：原文下方 / 原文上方（播放器快捷面板可改） */
+    translationPosition: 'below' | 'above';
+    /** 站点级「不再显示播放器快捷按钮」黑名单（hostname） */
+    hiddenShortcutHosts: string[];
     permanentDisable: boolean; // 永久禁用（冲突时）
   };
   /**
@@ -295,6 +299,8 @@ export const DEFAULT_CONFIG: UserConfig = {
     focusDialogue: true,
     service: 'inherit',
     displayMode: 'dual',
+    translationPosition: 'below',
+    hiddenShortcutHosts: [],
     permanentDisable: false,
   },
   asr: {

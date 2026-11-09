@@ -355,6 +355,16 @@ export default defineBackground(() => {
       case 'asr:cache:clear': {
         return (async () => ({ removed: await clearAsrCache(asrStorageArea) }))();
       }
+      case 'openOptions': {
+        // 播放器快捷面板里的「字幕样式 / 更多功能」跳设置页
+        return (async () => {
+          const hash = (msg.payload as { hash?: string } | undefined)?.hash;
+          // getURL 的路径类型由 WXT 生成（未收录带 hash 的动态串），显式放宽
+          const url = browser.runtime.getURL(`options.html${hash ? `#/${hash}` : ''}` as never);
+          await browser.tabs.create({ url });
+          return { ok: true as const };
+        })();
+      }
       case 'asr:model': {
         // 本地模型管理：转发给 offscreen（下载/删除/状态都在那边执行）
         return (async () => {
@@ -386,7 +396,13 @@ export default defineBackground(() => {
             status: 'absent' | 'downloading' | 'ready' | 'error';
             ratio?: number;
             error?: string;
-          }>('asr:local:model', { action: 'status', model }, 2);
+          }>('asr:local:model', {
+            action: 'status',
+            model,
+            dtype: cfg.asr.local.dtype,
+            modelBaseUrl: cfg.asr.local.modelBaseUrl,
+            modelRevision: cfg.asr.local.modelRevision,
+          }, 2);
           return res ?? { status: 'absent' as const };
         })();
       }

@@ -8,7 +8,13 @@
  */
 import Tesseract from 'tesseract.js';
 import { base64ToArrayBuffer, type AsrCue } from '@/core/asr';
-import { configureEngine, downloadModel, modelStatus, removeModel, transcribeLocal } from './asrLocal';
+import {
+  checkModelCached,
+  configureEngine,
+  downloadModel,
+  removeModel,
+  transcribeLocal,
+} from './asrLocal';
 
 let worker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
 
@@ -73,7 +79,13 @@ browser.runtime.onMessage.addListener((raw: unknown) => {
         await removeModel(model);
         return { status: 'absent' };
       }
-      return modelStatus(model);
+      // status：先看内存，再看 CacheStorage（重启后内存状态会丢）
+      return checkModelCached(
+        model,
+        msg.payload?.dtype ?? 'q8',
+        msg.payload?.modelBaseUrl ?? '',
+        msg.payload?.modelRevision ?? '',
+      );
     })();
   }
 

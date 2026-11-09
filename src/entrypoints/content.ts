@@ -12,6 +12,7 @@ import { initSubtitle, disposeSubtitle } from '@/engine/subtitle';
 import { translateImage } from '@/engine/imageTranslate';
 import { matchSiteRule } from '@/core/rules';
 import { initAsr, stopAllAsrSessions } from '@/engine/asrSession';
+import { disposePlayerButton, initPlayerButton } from '@/engine/playerButton';
 import '@/engine/content.css';
 
 /**
@@ -322,6 +323,7 @@ function disposeInteractions(): void {
   disposeInputBox();
   disposeCircleSelect();
   disposeSubtitle();
+  disposePlayerButton();
   stopAllAsrSessions();
 }
 
@@ -332,7 +334,8 @@ function setupInteractions(c: UserConfig): void {
   initInputBox(c);
   initCircleSelect(c);
   initSubtitle(c);
-  initAsr(c); // 无字幕视频的语音识别（ASR 方案 A1）
+  initAsr(c); // 无字幕视频的语音识别（ASR 方案 A1/A2）
+  initPlayerButton(c); // 播放器「CC」快捷按钮 + 字幕设置浮层
   applyInjectedCss(c);
 }
 
