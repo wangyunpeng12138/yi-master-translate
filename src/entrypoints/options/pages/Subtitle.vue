@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useConfigStore } from '@/core/config/ConfigStore';
 import { listAsrProviders } from '@/core/asr';
@@ -13,7 +13,6 @@ import ServicePicker from '@/components/ServicePicker.vue';
  *   provider 列表完全由 `listAsrProviders()` 的能力表生成，新增服务不需要改本页面。
  */
 const store = useConfigStore();
-onMounted(() => store.load());
 
 const providers = computed(() =>
   listAsrProviders(store.config).map((p) => ({
@@ -22,8 +21,115 @@ const providers = computed(() =>
   })),
 );
 
+const selected = computed(() => store.config.asr.provider);
+const isAuto = computed(() => selected.value === 'auto');
+/** 本地卡片：选中本地，或 auto（本地优先） */
+const showLocal = computed(() => {
+  if (isAuto.value) return true;
+  return providers.value.find((p) => p.id === selected.value)?.kind === 'local';
+});
+/** 云端卡片：选中云端，或 auto（本地不可用时的回退者） */
+const showCloud = computed(() => {
+  if (isAuto.value) return true;
+  return providers.value.find((p) => p.id === selected.value)?.kind === 'cloud';
+});
 const current = computed(() => providers.value.find((p) => p.id === store.config.asr.cloud.provider));
 const currentModelOptions = computed(() => current.value?.models ?? []);
+
+/** 识别方式变更：本地/自动只改 asr.provider；云端同时把该 provider 记为云端主服务 */
+function pickProvider(id: unknown) {
+  const value = String(id);
+  if (value === 'auto' || value === 'local-whisper') {
+    void store.patch({ asr: { provider: value } as never });
+  } else {
+    void store.patch({ asr: { provider: value, cloud: { ...store.config.asr.cloud, provider: value } } as never });
+  }
+}
+
+/* ---------- 本地模型管理（A2） ---------- */
+const localState = ref<{ status: string; ratio?: number; sizeMB?: number; error?: string }>({ status: 'absent' });
+const localBusy = ref(false);
+let pollTimer: number | undefined;
+
+async function refreshLocal() {
+  try {
+    localState.value = (await browser.runtime.sendMessage({
+      type: 'asr:model',
+      payload: { action: 'status', model: store.config.asr.local.model },
+    })) as typeof localState.value;
+  } catch {
+    localState.value = { status: 'absent' };
+  }
+}
+
+async function downloadLocal() {
+  localBusy.value = true;
+  try {
+    localState.value = (await browser.runtime.sendMessage({
+      type: 'asr:model',
+      payload: { action: 'download', model: store.config.asr.local.model },
+    })) as typeof localState.value;
+    ElMessage.info('已开始下载模型，首次约 40–250MB，可继续使用其它功能');
+    window.clearInterval(pollTimer);
+    pollTimer = window.setInterval(async () => {
+      await refreshLocal();
+      if (localState.value.status !== 'downloading') window.clearInterval(pollTimer);
+    }, 1000);
+  } finally {
+    localBusy.value = false;
+  }
+}
+
+async function removeLocal() {
+  try {
+    await ElMessageBox.confirm('删除已下载的本地模型？下次使用需重新下载。', '确认', { type: 'warning' });
+  } catch {
+    return;
+  }
+  localState.value = (await browser.runtime.sendMessage({
+    type: 'asr:model',
+    payload: { action: 'remove', model: store.config.asr.local.model },
+  })) as typeof localState.value;
+  ElMessage.success('模型已删除');
+}
+
+const localStatusText = computed(() => {
+  const s = localState.value;
+  if (s.status === 'ready') return '已就绪（离线可用）';
+  if (s.status === 'downloading') return `下载中 ${Math.round((s.ratio ?? 0) * 100)}%`;
+  if (s.status === 'error') return `失败：${s.error ?? '未知错误'}`;
+  return '未下载';
+});
+
+/* ---------- 模型来源预设（HF / ModelScope / hf-mirror） ---------- */
+const LOCAL_PRESETS = {
+  hf: { modelBaseUrl: '', modelRevision: 'main' },
+  modelscope: { modelBaseUrl: 'https://www.modelscope.cn/models', modelRevision: 'master' },
+  hfm: { modelBaseUrl: 'https://hf-mirror.com', modelRevision: 'main' },
+} as const;
+
+const localPreset = computed(() => {
+  const base = store.config.asr.local.modelBaseUrl;
+  if (!base) return 'hf';
+  if (base.includes('modelscope.cn')) return 'modelscope';
+  if (base.includes('hf-mirror.com')) return 'hfm';
+  return 'custom';
+});
+
+function applyLocalPreset(key: string) {
+  const preset = (LOCAL_PRESETS as Record<string, { modelBaseUrl: string; modelRevision: string }>)[key];
+  if (!preset) return; // 'custom'：保持用户手填
+  void store.patch({
+    asr: { local: { ...store.config.asr.local, ...preset } },
+  });
+  void refreshLocal();
+}
+
+onMounted(async () => {
+  await store.load();
+  await refreshLocal();
+});
+onUnmounted(() => window.clearInterval(pollTimer));
 
 const testing = ref(false);
 async function testAsr() {
@@ -128,10 +234,11 @@ async function clearCache() {
 
     <SettingRow title="识别方式" desc="列表由各 provider 的能力表生成，新增服务无需改本页面">
       <el-select
-        :model-value="store.config.asr.cloud.provider"
-        style="width: 280px"
-        @update:model-value="store.patch({ asr: { cloud: { provider: $event } } })"
+        :model-value="selected"
+        style="width: 300px"
+        @update:model-value="pickProvider($event)"
       >
+        <el-option label="自动（本机优先，失败回退云端）" value="auto" />
         <el-option
           v-for="p in providers"
           :key="p.id"
@@ -142,14 +249,83 @@ async function clearCache() {
       </el-select>
     </SettingRow>
 
-    <el-alert
-      v-if="current && !current.implemented"
-      type="info" :closable="false" show-icon
-      :title="`${current.name} 将在 A2 阶段接入（本地 Whisper）。当前请先使用云端识别。`"
-      style="margin-bottom: 8px"
-    />
+    <!-- 本地模型（本机推理，离线可用） -->
+    <template v-if="showLocal">
+      <SettingRow title="本地模型" desc="模型不随扩展分发：首次使用需下载，之后完全离线">
+        <div class="row-inline">
+          <el-select
+            :model-value="store.config.asr.local.model"
+            style="width: 200px"
+            @update:model-value="store.patch({ asr: { local: { ...store.config.asr.local, model: $event } } })"
+          >
+            <el-option label="whisper-tiny（约 40MB，最快）" value="whisper-tiny" />
+            <el-option label="whisper-base（约 80MB，推荐）" value="whisper-base" />
+            <el-option label="whisper-small（约 250MB，中文更好）" value="whisper-small" />
+          </el-select>
+          <el-select
+            :model-value="store.config.asr.local.dtype"
+            style="width: 110px"
+            @update:model-value="store.patch({ asr: { local: { ...store.config.asr.local, dtype: $event } } })"
+          >
+            <el-option label="q8" value="q8" />
+            <el-option label="fp16" value="fp16" />
+            <el-option label="fp32" value="fp32" />
+          </el-select>
+        </div>
+      </SettingRow>
 
-    <template v-if="current?.kind === 'cloud'">
+      <SettingRow title="模型状态" :desc="`${localStatusText}；单线程 wasm（扩展环境无跨源隔离）`">
+        <div class="row-inline">
+          <el-button
+            v-if="localState.status !== 'ready'"
+            type="primary" :loading="localBusy || localState.status === 'downloading'"
+            @click="downloadLocal"
+          >
+            下载模型
+          </el-button>
+          <template v-else>
+            <el-button @click="removeLocal">删除模型</el-button>
+            <span class="ok-hint">✓ 可离线识别</span>
+          </template>
+        </div>
+      </SettingRow>
+
+      <el-progress
+        v-if="localState.status === 'downloading'"
+        :percentage="Math.round((localState.ratio ?? 0) * 100)"
+        :stroke-width="8"
+        style="margin: 0 4px 12px"
+      />
+
+      <SettingRow title="模型来源" desc="留空 = HuggingFace 官方；国内推荐 ModelScope（revision 填 master）或 hf-mirror（revision 填 main）">
+        <div class="row-inline">
+          <el-select
+            :model-value="localPreset"
+            style="width: 150px"
+            @update:model-value="applyLocalPreset(String($event))"
+          >
+            <el-option label="HuggingFace" value="hf" />
+            <el-option label="ModelScope" value="modelscope" />
+            <el-option label="hf-mirror" value="hfm" />
+            <el-option label="自定义" value="custom" />
+          </el-select>
+          <el-input
+            :model-value="store.config.asr.local.modelBaseUrl"
+            placeholder="https://www.modelscope.cn/models"
+            style="width: 260px"
+            @update:model-value="store.patch({ asr: { local: { ...store.config.asr.local, modelBaseUrl: $event } } })"
+          />
+          <el-input
+            :model-value="store.config.asr.local.modelRevision"
+            placeholder="main / master"
+            style="width: 110px"
+            @update:model-value="store.patch({ asr: { local: { ...store.config.asr.local, modelRevision: $event } } })"
+          />
+        </div>
+      </SettingRow>
+    </template>
+
+    <template v-if="showCloud && current">
       <SettingRow title="接口端点" :desc="`留空使用默认：${current.defaultEndpoint || '（无默认，必须填写）'}`">
         <el-input
           :model-value="store.config.asr.cloud.endpoint"
@@ -245,4 +421,5 @@ async function clearCache() {
 .section-title { margin-top: 0; }
 h3 { font-size: 15px; margin: 18px 0 4px; }
 .row-inline { display: flex; align-items: center; gap: 12px; }
+.ok-hint { color: var(--el-color-success); font-size: 13px; }
 </style>

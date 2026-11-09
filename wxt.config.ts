@@ -31,6 +31,7 @@ export default defineConfig({
     description: '双语对照网页翻译 · 开源实现（Chrome MV3）',
     permissions: [
       'storage',
+      'unlimitedStorage', // 本地 Whisper 模型权重落 CacheStorage（A2）
       'activeTab',
       'contextMenus',
       'sidePanel',
@@ -39,7 +40,18 @@ export default defineConfig({
       'declarativeNetRequest',
       'declarativeNetRequestWithHostAccess',
     ],
-    host_permissions: ['<all_urls>'],
+    host_permissions: [
+      '<all_urls>',
+      // 本地 Whisper：模型权重（HuggingFace / ModelScope / hf-mirror）
+      'https://huggingface.co/*',
+      'https://cdn-lfs.huggingface.co/*',
+      'https://cdn.jsdelivr.net/*',
+    ],
+    // 本地 Whisper 依赖 ONNX Runtime Web 编译 wasm；MV3 默认 CSP 没有 'wasm-unsafe-eval'，
+    // 不加这条会报 “Compiling or instantiating WebAssembly module violates ... script-src 'self'”
+    content_security_policy: {
+      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    },
     declarative_net_request: {
       rule_resources: [
         {

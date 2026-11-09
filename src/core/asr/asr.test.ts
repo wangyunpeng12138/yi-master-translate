@@ -19,11 +19,11 @@ describe('ASR provider 链', () => {
     expect(getAsrChain(cfg({ provider: 'off' }))).toEqual([]);
   });
 
-  it('auto 时按「cloud.provider → fallbackOrder」去重排序，未实现项被过滤', () => {
+  it('auto 时本地优先，其次 cloud.provider → fallbackOrder（去重）', () => {
     const chain = getAsrChain(
       cfg({ provider: 'auto', cloud: { ...DEFAULT_CONFIG.asr.cloud, provider: 'deepgram', fallbackOrder: ['local-whisper', 'groq-whisper', 'deepgram'] } }),
     );
-    expect(chain).toEqual(['deepgram', 'groq-whisper']); // local-whisper 在 A1 未实现
+    expect(chain).toEqual(['local-whisper', 'deepgram', 'groq-whisper']);
   });
 
   it('指定 provider 时其自身排在最前', () => {
@@ -34,15 +34,18 @@ describe('ASR provider 链', () => {
     expect(chain).toContain('openai-whisper');
   });
 
-  it('本地 Whisper 当前标记为未实现', () => {
-    expect(isAsrProviderImplemented('local-whisper')).toBe(false);
+  it('本地 Whisper 在 A2 已接入', () => {
+    expect(isAsrProviderImplemented('local-whisper')).toBe(true);
     expect(isAsrProviderImplemented('openai-whisper')).toBe(true);
   });
 
-  it('能力表包含 5 个已实现 provider + 1 个待接入', () => {
+  it('能力表包含 6 个已实现 provider，本地标为 local', () => {
     const list = listAsrProviders(DEFAULT_CONFIG);
-    expect(list.filter((p) => p.implemented).length).toBe(5);
-    expect(list.some((p) => p.id === 'local-whisper' && !p.implemented)).toBe(true);
+    expect(list.filter((p) => p.implemented).length).toBe(6);
+    const local = list.find((p) => p.id === 'local-whisper');
+    expect(local?.kind).toBe('local');
+    expect(local?.offline).toBe(true);
+    expect(local?.models).toContain('whisper-base');
     const openai = list.find((p) => p.id === 'openai-whisper');
     expect(openai?.needsKey).toBe(true);
     expect(openai?.resolvedEndpoint).toBe('https://api.openai.com');

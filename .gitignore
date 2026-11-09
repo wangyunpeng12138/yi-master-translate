@@ -6,3 +6,6 @@ dist/
 .temp/
 *.log
 .DS_Store
+
+# ONNX Runtime wasm copied by scripts/copy-ort.mjs before build (binary, not committed)
+public/ort/

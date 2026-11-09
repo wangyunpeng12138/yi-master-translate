@@ -6,13 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
+    "prebuild": "node scripts/copy-ort.mjs",
     "build": "wxt build",
+    "postbuild": "node scripts/prune-ort.mjs",
     "zip": "wxt zip",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "@huggingface/transformers": "^4.3.2",
     "element-plus": "^2.8.8",
     "pinia": "^2.2.6",
     "tesseract.js": "^7.0.0",

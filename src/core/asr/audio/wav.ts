@@ -65,3 +65,28 @@ export function parseWavHeader(buffer: ArrayBuffer): {
     dataSize: ok ? view.getUint32(40, true) : 0,
   };
 }
+
+/**
+ * WAV(16bit PCM) → Float32Array（本地 Whisper 需要 [-1,1] 的浮点采样）
+ * 多声道时按帧求均值降为单声道；非 16bit 直接报错（我们只产出 16k/16bit）。
+ */
+export function wavToFloat32(buffer: ArrayBuffer): { pcm: Float32Array; sampleRate: number } {
+  const header = parseWavHeader(buffer);
+  if (!header.ok) throw new Error('不是合法的 WAV 数据');
+  if (header.bitsPerSample !== 16) {
+    throw new Error(`仅支持 16bit PCM，当前为 ${header.bitsPerSample}bit`);
+  }
+  const channels = Math.max(1, header.channels);
+  const dataSize = Math.min(header.dataSize, buffer.byteLength - header.dataOffset);
+  const view = new DataView(buffer, header.dataOffset, dataSize - (dataSize % 2));
+  const frames = Math.floor(dataSize / 2 / channels);
+  const pcm = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    let sum = 0;
+    for (let c = 0; c < channels; c++) {
+      sum += view.getInt16((i * channels + c) * 2, true) / 0x8000;
+    }
+    pcm[i] = sum / channels;
+  }
+  return { pcm, sampleRate: header.sampleRate };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeWav, floatTo16BitPCM, parseWavHeader } from './wav';
+import { encodeWav, floatTo16BitPCM, parseWavHeader, wavToFloat32 } from './wav';
 
 describe('wav 编码', () => {
   it('写入合法 RIFF/WAVE 头且参数为 16k/单声道/16bit', () => {
@@ -27,5 +27,22 @@ describe('wav 编码', () => {
     const view = new DataView(buf);
     expect(view.getUint32(28, true)).toBe(8_000 * 2); // 字节率
     expect(view.getUint16(32, true)).toBe(2); // 块对齐
+  });
+
+  it('wavToFloat32 往返：编码后解码回近似原值', () => {
+    const src = new Float32Array([0, 0.5, -0.5, 1, -1, 0.25]);
+    const back = wavToFloat32(encodeWav(src, 16_000));
+    expect(back.sampleRate).toBe(16_000);
+    expect(back.pcm.length).toBe(src.length);
+    for (let i = 0; i < src.length; i++) {
+      expect(Math.abs(back.pcm[i] - src[i])).toBeLessThan(0.001);
+    }
+  });
+
+  it('wavToFloat32 拒绝非 WAV / 非 16bit', () => {
+    expect(() => wavToFloat32(new ArrayBuffer(10))).toThrow();
+    const buf = encodeWav(new Float32Array(4), 16_000);
+    new DataView(buf).setUint16(34, 8, true); // 篡改位深
+    expect(() => wavToFloat32(buf)).toThrow(/16bit/);
   });
 });

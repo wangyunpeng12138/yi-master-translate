@@ -40,6 +40,11 @@ export interface RequestMap {
   /** 连通性/配置自检：用 0.3s 静音探测第一个可用 provider */
   'asr:test': { req: { provider?: 'auto' | AsrProviderId }; res: AsrTestResult };
   'asr:cache:clear': { req: {}; res: { removed: number } };
+  /** 本地模型管理（status 轮询 / download 触发 / remove 删除） */
+  'asr:model': {
+    req: { action: 'status' | 'download' | 'remove'; model?: string };
+    res: { status: 'absent' | 'downloading' | 'ready' | 'error'; ratio?: number; sizeMB?: number; error?: string };
+  };
 }
 
 /** 事件广播型消息（background → content / UI） */
@@ -75,5 +80,6 @@ export function isRequestType(t: string): t is RequestType {
     'asr:transcribe',
     'asr:test',
     'asr:cache:clear',
+    'asr:model',
   ].includes(t);
 }

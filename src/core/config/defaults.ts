@@ -121,14 +121,19 @@ export interface UserConfig {
       windowSec: number; // 单个识别窗口时长（默认 30s）
       strideSec: number; // 相邻窗口重叠，避免切句丢字（默认 5s）
       captureRate: 1 | 1.5 | 2; // 采集时的播放倍速（2× 更快但掉准确率）
+      /** 静音门限（0–1 的 RMS）：低于此值的窗口直接丢弃，避免 Whisper 在静音上产生幻觉 */
+      silenceRms: number;
     };
-    /** 本地 Whisper（A2 落地；A1 只落配置，provider 未注册） */
+    /** 本地 Whisper（A2 落地） */
     local: {
       model: 'whisper-tiny' | 'whisper-base' | 'whisper-small';
       dtype: 'q8' | 'fp16' | 'fp32';
       numThreads: number;
       progressive: boolean;
+      /** 模型下载源：空 = HuggingFace 官方；国内可填 https://hf-mirror.com 或 https://www.modelscope.cn/models */
       modelBaseUrl: string;
+      /** 分支/标签/commit；HuggingFace 为 main，ModelScope 为 master */
+      modelRevision: string;
     };
     /** 云端 ASR */
     cloud: {
@@ -304,6 +309,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       windowSec: 30,
       strideSec: 5,
       captureRate: 1,
+      silenceRms: 0.004,
     },
     local: {
       model: 'whisper-base',
@@ -311,6 +317,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       numThreads: 1,
       progressive: true,
       modelBaseUrl: '',
+      modelRevision: 'main',
     },
     cloud: {
       provider: 'openai-whisper',

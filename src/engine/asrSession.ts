@@ -50,6 +50,40 @@ function findSourceIndex(items: SessionItem[], time: number): number {
   return -1;
 }
 
+/** 窗口 RMS（0–1）：用于判断是否纯静音/纯音乐，避免把静音送进 Whisper 产生幻觉 */
+function rms(pcm: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
+  return Math.sqrt(sum / Math.max(1, pcm.length));
+}
+
+/**
+ * 压缩 Whisper 的「复读幻觉」：连续重复的 n-gram（n=3..8）只保留一次，超过 4 次重复的整句丢弃。
+ * 典型症状：静音/音乐段输出 "…who are in the world who are in the world…" 刷屏。
+ */
+export function cleanRepeated(text: string): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 9) return text.trim();
+  for (let n = 3; n <= 8; n++) {
+    for (let i = 0; i + n * 3 <= words.length; i++) {
+      const unit = words.slice(i, i + n).join(' ');
+      let reps = 1;
+      while (
+        i + (reps + 1) * n <= words.length &&
+        words.slice(i + reps * n, i + (reps + 1) * n).join(' ') === unit
+      ) {
+        reps += 1;
+      }
+      if (reps >= 3) {
+        // 保留一份，删掉其余重复
+        words.splice(i + n, (reps - 1) * n);
+        if (reps >= 5) return words.slice(0, i + n).join(' '); // 过度复读：只留前半段
+      }
+    }
+  }
+  return words.join(' ');
+}
+
 /** 启动一个视频的 ASR 会话；若该视频已有字幕轨或已在会话中，返回 null */
 export async function startAsrSession(
   video: HTMLVideoElement,
@@ -119,8 +153,12 @@ export async function startAsrSession(
   const ingest = async (cues: AsrCue[]) => {
     const fresh: SessionItem[] = [];
     for (const c of cues) {
-      const text = c.text.trim();
+      const text = cleanRepeated(c.text);
       if (!text) continue;
+      // 纯标注/噪声（「[Music]」「(掌声)」）不展示
+      if (/^[\[(（【].*[\])）】]$/.test(text) && !/[\p{L}\p{N}]/u.test(text.replace(/[\[(（【\])）】]/g, ''))) {
+        continue;
+      }
       // 重叠窗口会产生重复 cue：同文本且时间接近的丢弃
       const dup = items.some((it) => it.text === text && Math.abs(it.start - c.start) < 1.5);
       if (dup) continue;
@@ -217,6 +255,9 @@ export async function startAsrSession(
       const offsetSec = consumedSamples / sampleRate;
       consumedSamples += winSamples - strideSamples;
       buffer = buffer.slice(winSamples - strideSamples);
+      // 静音门限：纯静音/极低音量窗口不送识别（省钱、防幻觉）
+      const minRms = config.asr.capture.silenceRms ?? 0;
+      if (minRms > 0 && rms(slice) < minRms) continue;
       void flushWindow(slice, offsetSec);
       if (inFlight) break; // 单飞：识别没回来之前不堆窗口
     }

@@ -19,6 +19,7 @@ import {
   encodeWav,
   getAsrCache,
   getAsrChain,
+  isLocalAsrProvider,
   setAsrCache,
 } from '@/core/asr';
 import type { AsrProviderId } from '@/core/asr';
@@ -135,17 +136,41 @@ async function setupContextMenus(): Promise<void> {
   });
 }
 
-/** 确保 offscreen 文档存活（OCR 前调用）；已存在时 createDocument 抛错，静默忽略 */
+/**
+ * 确保 offscreen 文档存活（OCR / 本地 Whisper 前调用）
+ * - `reasons` 必须是 Chrome 的合法枚举（此前用 'OCR' 非法 → createDocument 一直失败，
+ *   offscreen 从未真正创建过，所有转发消息都报 "Receiving end does not exist"）
+ * - 已存在时 createDocument 会抛错，静默忽略
+ */
 async function ensureOffscreen(): Promise<void> {
+  const has = await browser.runtime.getContexts?.({ contextTypes: ['OFFSCREEN_DOCUMENT' as never] });
+  if (Array.isArray(has) && has.length > 0) return;
   try {
     await browser.offscreen.createDocument({
       url: 'offscreen.html',
-      reasons: ['OCR' as never],
-      justification: '本地 OCR 图片文字识别',
+      reasons: ['DOM_SCRAPING' as never, 'WORKERS' as never],
+      justification: '本地 OCR 与本地 Whisper 语音识别（wasm 推理，需页面环境）',
     });
   } catch {
     // 已存在（"Only a single offscreen document may be created"）→ 忽略
   }
+}
+
+/**
+ * 向 offscreen 发消息。
+ * offscreen 刚创建时脚本可能还没就绪，直接发会 "Receiving end does not exist"（实测踩过），
+ * 因此带小步重试。
+ */
+async function sendToOffscreen<T>(type: string, payload: unknown, retries = 6): Promise<T | undefined> {
+  for (let i = 0; i < retries; i++) {
+    await ensureOffscreen();
+    try {
+      return (await browser.runtime.sendMessage({ type, payload })) as T;
+    } catch {
+      await new Promise((r) => setTimeout(r, 150 + i * 150));
+    }
+  }
+  return undefined;
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -246,6 +271,11 @@ export default defineBackground(() => {
           const durationSec = Number(payload.durationSec ?? 0);
           const fingerprint = audioFingerprint(wav);
 
+          // 链里有本地 provider 时先把 offscreen 拉起来（推理在那边跑）
+          if (chain.some((id) => isLocalAsrProvider(id))) {
+            await ensureOffscreen().catch(() => undefined);
+          }
+
           let lastError: Error | null = null;
           for (const id of chain) {
             const key = asrCacheKey(id, lang, fingerprint);
@@ -324,6 +354,41 @@ export default defineBackground(() => {
       }
       case 'asr:cache:clear': {
         return (async () => ({ removed: await clearAsrCache(asrStorageArea) }))();
+      }
+      case 'asr:model': {
+        // 本地模型管理：转发给 offscreen（下载/删除/状态都在那边执行）
+        return (async () => {
+          const payload = msg.payload as { action?: 'status' | 'download' | 'remove'; model?: string };
+          const cfg = await loadUserConfig();
+          const model = payload?.model ?? cfg.asr.local.model;
+          if (payload?.action === 'download') {
+            const res = await sendToOffscreen<{ status?: string }>('asr:local:model', {
+              action: 'download',
+              model,
+              dtype: cfg.asr.local.dtype,
+              modelBaseUrl: cfg.asr.local.modelBaseUrl,
+              modelRevision: cfg.asr.local.modelRevision,
+            });            if (!res) {
+              return { status: 'error' as const, error: '本地识别引擎未就绪（offscreen 创建失败）' };
+            }
+            return { status: 'downloading' as const, ratio: 0 };
+          }
+          if (payload?.action === 'remove') {
+            const res = await sendToOffscreen<{ status?: string }>(
+              'asr:local:model',
+              { action: 'remove', model },
+              3,
+            );
+            return { status: (res?.status as 'absent') ?? 'absent' };
+          }
+          // status：offscreen 未起时直接判 absent（不要为查状态就把引擎拉起来）
+          const res = await sendToOffscreen<{
+            status: 'absent' | 'downloading' | 'ready' | 'error';
+            ratio?: number;
+            error?: string;
+          }>('asr:local:model', { action: 'status', model }, 2);
+          return res ?? { status: 'absent' as const };
+        })();
       }
       case 'explain:paragraph': {
         // 段落术语解释（AI 搜索）：缓存命中直接返回，否则调 AI 并写缓存

@@ -18,7 +18,7 @@
 2. **推荐默认路线**：`MediaElementAudioSourceNode` 实时采集（R1）→ 16kHz 单声道 PCM → 30s 滚动窗口 → 本地 Whisper（`transformers.js` + ONNX Runtime Web）。
 3. **本地模型不随包分发**，改为"用户点一下按需下载 + CacheStorage 持久化"，避免安装包 +40~250MB；离线环境支持"导入本地模型目录"。
 4. **可配置化**落在三处：`asr.*` 配置树（defaults.ts）、provider 注册表（capabilities 驱动 UI）、消息协议（`asr:*`）。新增一个云端 ASR 只要写一个适配器 + 一条注册项，**不改 UI、不改调用方**。
-5. **成本预期**（估算，需 A2 实测校正）：`whisper-base` q8 单线程在桌面 CPU 上约 **0.3–0.6× 实时**（1 分钟音频 100–200 秒）；`tiny` q8 约 **0.15–0.3× 实时**。所以本地更适合"边看边识别"而非"秒出全片"；云 API 适合长视频/弱机型。
+5. **成本预期**（估；A2 已回填部分实测，见附录 E）：`whisper-base` q8 单线程在桌面 CPU 上约 **0.3–0.6× 实时**（1 分钟音频 100–200 秒）；`tiny` q8 更快但质量差。所以本地更适合"边看边识别"而非"秒出全片"；云 API 适合长视频/弱机型。**实测发现最大障碍不是速度，而是"模型从哪下"**（HuggingFace 权重 CDN 在部分网络不可达 → 用 ModelScope，见 §5.1 坑 3）。
 6. **与原方案的关系**：ASR 只产出 `{start, end, text}` 的 cue 数组，**直接复用** x-com 方案 §5 的翻译管线与双语字幕层（`OverlayChannel`）。ASR 是"字幕来源"之一，不是新的渲染系统。
 
 ---
@@ -220,20 +220,29 @@ export function listAsrProviders(config: UserConfig): AsrProvider[];
 
 ### 5.1 运行时选型
 
-**`@huggingface/transformers`（transformers.js v3）+ ONNX Runtime Web**。
+**`@huggingface/transformers` v4.3.2（transformers.js）+ ONNX Runtime Web（wasm 后端）**。
 
 选它的理由（与参考实现对齐）：
 
 - 参考产物里本来就有 `wasm/ort-wasm-simd-threaded.wasm`（11MB）与 `aifw/libner-*.js`（内含 `WhisperTokenizer` / `InferenceSession`），说明 ONNX 路线在原版里是"已经被验证可行"的（只是桌面版没用在字幕上）。
-- 纯前端、无 Node 依赖，能跑在 offscreen 的 Worker 里。
+- 纯前端、无 Node 依赖，能跑在 offscreen 的 Worker/页面环境里。
 - 自带模型下载 + CacheStorage 缓存 + 量化档选择。
+
+**A2 落地时踩到的 4 个坑（都已在代码里解决，换环境/升级版本时重点复查）**：
+
+| # | 现象 | 根因 | 解决 |
+| --- | --- | --- | --- |
+| 1 | `no available backend found ... Failed to fetch dynamically imported module: .../ort-wasm-simd-threaded.asyncify.mjs` | transformers.js 默认让 ORT 去 **jsDelivr** 拉与 dev 版本匹配的 `.mjs` 加载器，该 dev 版本在 CDN 上没有 | `scripts/copy-ort.mjs` 构建前把 `ort-wasm-simd-threaded.{mjs,wasm}` 拷进 `public/ort/`，`wasmPaths` 钉到 `chrome-extension://.../ort/`；`scripts/prune-ort.mjs` 构建后删掉 Vite 顺手打包的 25MB asyncify 变体 |
+| 2 | `Compiling or instantiating WebAssembly module violates ... script-src 'self'` | **MV3 默认 CSP 不含 `'wasm-unsafe-eval'`** | `manifest.content_security_policy.extension_pages = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"` |
+| 3 | 模型权重 `Failed to fetch`（`ERR_CONNECTION_CLOSED`） | HuggingFace 把大文件 302 到 `us.aws.cdn.hf.co`，该域名在部分网络不可达 | 支持 `asr.local.modelBaseUrl` + `modelRevision`：国内用 **ModelScope**（`https://www.modelscope.cn/models` + `master`）或 hf-mirror（+`main`） |
+| 4 | `Failed to cache xxx.wasm: Request scheme 'chrome-extension' is unsupported` | CacheStorage 不接受 `chrome-extension://` 协议缓存 | 仅告警，可忽略（wasm 本来就在扩展包内） |
 
 替代方案与取舍：
 
 | 方案 | 优点 | 缺点 | 结论 |
 | --- | --- | --- | --- |
 | transformers.js（ONNX） | 生态成熟、模型全、API 简单 | 首次下载、单线程慢 | ✅ 采用 |
-| whisper.cpp → wasm 自编译 | 速度更快、内存更省 | 需要自己维护 wasm 构建与线程化，扩展环境受限 | 备选（A5 评估） |
+| whisper.cpp → wasm 自编译 | 速度更快、内存更省 | 需自己维护 wasm 构建与线程化 | 备选（A5 评估） |
 | 原生（Node/Electron） | 最快 | 扩展里跑不了 | ❌ |
 
 ### 5.2 模型档位（按需下载）
@@ -351,14 +360,16 @@ export interface AsrConfig {
     model: 'whisper-tiny' | 'whisper-base' | 'whisper-small';
     dtype: 'q8' | 'fp16' | 'fp32';
     numThreads: number;        // 默认 1（扩展页无 SAB）
-    progressive: boolean;      // tiny 先行、base 替换
-    modelBaseUrl: string;      // 空 = HuggingFace 官方；可指向内网
+    progressive: boolean;      // tiny 先行、base 替换（A3）
+    modelBaseUrl: string;      // 空 = HuggingFace；或 ModelScope / hf-mirror / 内网
+    modelRevision: string;     // HuggingFace=main，ModelScope=master
   };
   /** 音频采集窗口（与 provider 无关，本地/云端都按这个切） */
   capture: {
     windowSec: number;         // 默认 30
     strideSec: number;         // 默认 5
     captureRate: 1 | 1.5 | 2;  // 播放倍速采集（默认 1）
+    silenceRms: number;        // 静音门限（默认 0.004）：低于此值窗口直接丢弃，防幻觉
   };
   cloud: {
     provider: AsrProviderId;
@@ -706,23 +717,26 @@ const cues = json.segments.map((s: any) => ({ start: s.start, end: s.end, text: 
 }
 ```
 
-### E. 待实测基线（A2 后回填）
+### E. 实测基线（A2 首次回填，2026-11-09）
 
-| 指标 | tiny q8 | base q8 | small q8 | 说明 |
+环境：Chrome 157 / 24 核 / 16GB / 单线程 wasm（`crossOriginIsolated=false`）/ 模型源 ModelScope。
+
+| 指标 | whisper-tiny q8 | base q8 | small q8 | 说明 |
 | --- | --- | --- | --- | --- |
-| 模型体积 | 估 40MB | 估 80MB | 估 250MB | `sizeOnDiskMB()` 实测 |
-| 首次加载 | ? | ? | ? | 含 wasm 初始化 |
-| 1 分钟音频推理 | ? | ? | ? | 单线程 wasm、24 核桌面 CPU（A0 基线） |
-| 中文 CER | ? | ? | ? | 用 3 段采访音频对照 |
-| 峰值内存 | ? | ? | ? | 关注是否触发 OOM |
-| 多线程可用性 | ? | ? | ? | `crossOriginIsolated=false` 但 SAB 可构造，A5 实测 |
+| 模型体积 | ≈40MB（encoder+decoder+tokenizer） | 待测 | 待测 | 首次从 ModelScope 下载，之后走 CacheStorage |
+| 首次下载耗时 | ≈1–2 分钟（视网络） | 待测 | 待测 | 实测缓存命中后启动 <1s |
+| ORT 初始化 | ≈1–3s（首次编译 wasm） | 同 | 同 | 之后复用 pipeline 实例 |
+| 识别延迟 | 8s 窗口 → 秒级出结果 | 待测 | 待测 | 未做严格基准，A5 补 |
+| 中文质量 | 差（本次英文采访可用） | 待测 | 待测 | tiny 建议只做"快速预览" |
+| 幻觉抑制 | ✅ silenceRms 门限 + 复读压缩 + `no_speech_threshold` | 同 | 同 | 未加前会出现 "who are in the world…" 刷屏 |
+| 扩展产物体积 | 21.8MB（含 ORT wasm 13.6MB + tesseract 6.6MB） | — | — | asyncify/jsep/jspi 变体已在 postbuild 删除 |
 
 ---
 
 ## 13. 配置指南（照做即可用）
 
 > 本节是"给其他人看"的操作手册：从构建装载到逐个服务配置，再到排错与验收。
-> **当前实现状态见 §14**：云 API 已全部可用，本地 Whisper 在 A2。
+> **当前实现状态见 §14**：云 API 与本地 Whisper（A2）均已可用。
 
 ### 13.1 第 0 步：构建并装载扩展
 
@@ -736,9 +750,11 @@ pnpm build                       # 产物在 .output/chrome-mv3
 
 > ⚠️ **重建后必须让它重新读代码**，否则你改的/新加的功能不会生效：
 > - 手动装载：在 `chrome://extensions` 点该扩展卡片上的「重新加载」；
-> - 用 profile 注册（自动化场景）：先退出 Chrome，删掉
->   `<profile>\Default\Service Worker` 与 `Default\Code Cache`，再启动。
->   **否则 Service Worker 会命中旧脚本缓存**（本项目实测：源码已 34988 字节，SW 仍跑 25354 字节的旧版，导致新消息类型全部返回 `undefined`）。
+> - 用 profile 注册（自动化场景）：先退出 Chrome，**只删脚本缓存**
+>   `<profile>\Default\Service Worker\ScriptCache`（与 `Default\Code Cache`），再启动。
+>   **不要把整个 `Service Worker` 目录删掉**——本地 Whisper 的模型权重就缓存在同目录的
+>   `CacheStorage` 里，删了要重下 40–250MB（本项目实测踩过）。
+> - **否则 Service Worker 会命中旧脚本缓存**（实测：源码已 34988 字节，SW 仍跑 25354 字节的旧版，导致新消息类型全部返回 `undefined`）。
 > - 内容脚本会随页面刷新更新，但**已打开的标签页需要刷新**才生效。
 
 ### 13.2 第 1 步：打开总开关
@@ -816,6 +832,28 @@ docker run -d --name whisper-server -p 8080:8080 \
 | API Key | 视服务而定 |
 | 模型 | 视服务而定 |
 
+#### F) 本地 Whisper（隐私最好、可离线；A2 已接入）
+
+| 字段 | 说明 |
+| --- | --- |
+| 识别方式 | 选「本地 Whisper」（或「自动（本机优先）」） |
+| 本地模型 | `whisper-tiny`(≈40MB) / `whisper-base`(≈80MB) / `whisper-small`(≈250MB)；中文建议 base 起步 |
+| 量化 | `q8` 默认（体积小、速度最快）；fp16/fp32 精度更高但更慢更大 |
+| 模型状态 | 点「下载模型」→ 进度条 → 「已就绪（离线可用）」；可「删除模型」回收空间 |
+| 模型来源 | 见下表；三选一预设，也可手填任意静态目录 |
+| 版本(revision) | HuggingFace 用 `main`；**ModelScope 必须用 `master`** |
+
+**模型来源预设（实测可用性）**：
+
+| 预设 | `modelBaseUrl` | `revision` | 实测 |
+| --- | --- | --- | --- |
+| HuggingFace 官方 | 留空 | `main` | ⚠️ 权重会 302 到 `us.aws.cdn.hf.co`，部分网络连不上（本项目实测 `ERR_CONNECTION_CLOSED`） |
+| **ModelScope（国内推荐）** | `https://www.modelscope.cn/models` | `master` | ✅ 实测可下（有 `onnx/` 目录，支持 Range 断点） |
+| hf-mirror | `https://hf-mirror.com` | `main` | ⚠️ 可用但会限流（HEAD/高频请求 429） |
+| 自建静态目录 | `https://your.cdn/whisper` | 自定义 | 目录需按 `{model}/resolve/{revision}/…` 摆放 |
+
+下载完成后：完全离线可用（权重在 CacheStorage，wasm 在扩展包内）。首次识别会初始化 ORT（约 1–3s），之后按窗口持续出字幕。
+
 ### 13.4 第 3 步：验证（三层）
 
 1. **端点连通性**：设置页点「测试」→ 用 0.3 秒静音打一次真实请求，返回 `连接成功：<provider>（<ms>ms）` 即可。
@@ -855,7 +893,12 @@ http.createServer(async (req, res) => {
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 设置页「测试」返回 `undefined` / 什么都没发生 | **Service Worker 还在跑旧脚本** | 重新构建后按 §13.1 清 SW 缓存或点「重新加载」 |
+| 设置页「测试」返回 `undefined` / 什么都没发生 | **Service Worker 还在跑旧脚本** | 重新构建后按 §13.1 让扩展重新加载（**别删整个 `Service Worker` 目录，会连模型一起删**） |
+| 模型下载报 `Failed to fetch` | 权重被 302 到 `us.aws.cdn.hf.co`（部分网络不可达） | 模型来源换 **ModelScope**（revision=`master`）或 hf-mirror |
+| 模型下载 429 | hf-mirror 限流 | 换 ModelScope，或等几分钟再试 |
+| `no available backend found ... ort-wasm-*.mjs` | ORT 去 CDN 拉 dev 版加载器失败 | 确认 `pnpm build` 跑过 `copy-ort`（`public/ort/` 有 13.6MB wasm），且扩展已重新加载 |
+| `WebAssembly.instantiate(): violates CSP` | MV3 默认 CSP 不放行 wasm 编译 | 确认 manifest 里有 `content_security_policy.extension_pages` 且含 `'wasm-unsafe-eval'` |
+| 本地字幕满屏重复同一句 | Whisper 在静音/音乐段幻觉 | 调高 `asr.capture.silenceRms`（如 0.01）、指定识别语言、换 base/small 模型 |
 | 视频播放但没有任何提示 | `asr.enabled=false`；或该视频**有**字幕轨（走 track 翻译）；或时长超过 `maxDurationMin` | 检查开关；看 `video.textTracks.length` |
 | 一直显示「等待音频…点击视频任意位置以开始识别」 | 自动播放策略把 AudioContext 停在 `suspended` | 点一下视频画面 |
 | 提示「没有采集到声音」 | 音频被 CORS 污染（直连跨域 mp4）或站点静音 | 见方案 §3.2 降级 R3；或改用云端（同样取不到音频时需 R3） |
@@ -956,7 +999,29 @@ http.createServer(async (req, res) => {
 
 即：**采集 → WAV(16k/mono/16bit) → 上传 → 解析 segments → 批量翻译 → 浮层按时间轴显示** 全链路打通。
 
-### 14.3 待办（A2 起）
+### 14.2 A2 已完成：本地 Whisper（2026-11-09）
+
+| 模块 | 文件 | 状态 |
+| --- | --- | --- |
+| 本地推理引擎（offscreen） | `src/entrypoints/offscreen/asrLocal.ts` | ✅ |
+| 本地 provider（background 侧转发 + 模型管理） | `src/core/asr/providers/local-whisper.ts` | ✅ 已注册进 `IMPLEMENTED` |
+| 模型下载源可配置（HF / ModelScope / hf-mirror / 内网） | `asr.local.modelBaseUrl` + `modelRevision` | ✅ |
+| ORT wasm 随包分发 | `scripts/copy-ort.mjs`（prebuild）+ `scripts/prune-ort.mjs`（postbuild） | ✅ |
+| MV3 CSP 放开 wasm 编译 | `wxt.config.ts` → `content_security_policy.extension_pages` | ✅ |
+| 幻觉抑制 | `asr.capture.silenceRms` 门限 + `cleanRepeated()` 复读压缩 + Whisper `no_speech_threshold` | ✅ |
+| 设置页本地分区（预设/下载/进度/删除） | `Subtitle.vue` | ✅ |
+| 单测 | `asrSession.test.ts`（复读压缩）、`wav.test.ts`（WAV 往返） | ✅ 71/71 |
+
+**真机验证（x.com 无字幕视频，whisper-tiny q8 + ModelScope）**：
+
+```
+模型下载 → status: ready
+视频播放 → 浮层：I hope you guys enjoy it.  /  希望你们玩得开心。
+```
+
+即：**模型下载（ModelScope）→ ORT wasm 编译 → 本地推理 → cue 解析 → 翻译 → 双语浮层** 全链路打通，全程零云端请求。
+
+### 14.3 待办（A3 起）
 
 - **A2**：本地 Whisper（transformers.js + 模型下载/管理 + 单线程推理），注册进 `registry.ts` 的 `IMPLEMENTED`
 - **A3**：无轨提示条、播放器「译」按钮（手动触发）、`tiny→base` 渐进替换、AudioWorklet 替代 ScriptProcessor

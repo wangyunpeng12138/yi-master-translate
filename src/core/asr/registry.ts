@@ -2,6 +2,7 @@ import type { UserConfig } from '@/core/config/defaults';
 import { AsrError, type AsrProvider, type AsrProviderId } from './types';
 import { createOpenAiAsrProvider, resolveAsrEndpoint } from './providers/openai-asr';
 import { createDeepgramProvider } from './providers/deepgram';
+import { createLocalWhisperProvider } from './providers/local-whisper';
 
 /**
  * ASR provider 注册表
@@ -12,8 +13,8 @@ import { createDeepgramProvider } from './providers/deepgram';
  * - 新增一个 provider = 本文件加一条记录 + 一个适配器文件，调用方与 UI 都不用改
  */
 
-/** 已实现（A1）；local-whisper 在 A2 落地后加入 */
 const IMPLEMENTED: AsrProviderId[] = [
+  'local-whisper',
   'openai-whisper',
   'groq-whisper',
   'deepgram',
@@ -21,8 +22,10 @@ const IMPLEMENTED: AsrProviderId[] = [
   'custom-openai-asr',
 ];
 
-/** 声明但未实现（UI 上显示为「即将支持」，避免用户配了却不生效还不知道原因） */
-const DECLARED_ONLY: AsrProviderId[] = ['local-whisper'];
+/** 声明但未实现（UI 上灰显，避免用户配了却不生效还不知道原因） */
+const DECLARED_ONLY: AsrProviderId[] = [];
+
+const LOCAL_IDS: AsrProviderId[] = ['local-whisper'];
 
 export function isAsrProviderImplemented(id: string): boolean {
   return IMPLEMENTED.includes(id as AsrProviderId);
@@ -31,6 +34,8 @@ export function isAsrProviderImplemented(id: string): boolean {
 export function createAsrProvider(config: UserConfig, id: AsrProviderId): AsrProvider {
   const cloud = config.asr.cloud;
   switch (id) {
+    case 'local-whisper':
+      return createLocalWhisperProvider(config);
     case 'openai-whisper':
     case 'groq-whisper':
     case 'whisper-cpp-server':
@@ -38,8 +43,6 @@ export function createAsrProvider(config: UserConfig, id: AsrProviderId): AsrPro
       return createOpenAiAsrProvider(id, cloud);
     case 'deepgram':
       return createDeepgramProvider(cloud);
-    case 'local-whisper':
-      throw new AsrError('本地 Whisper 尚未接入（A2 阶段落地）', 'unsupported');
     default:
       throw new AsrError(`未知 ASR provider: ${String(id)}`, 'unsupported');
   }
@@ -112,10 +115,20 @@ export function getAsrChain(config: UserConfig): AsrProviderId[] {
     if (!isAsrProviderImplemented(id)) return;
     if (!chain.includes(id as AsrProviderId)) chain.push(id as AsrProviderId);
   };
-  push(config.asr.provider);
+  if (config.asr.provider === 'auto') {
+    // auto：本地优先（模型未下载时 provider 会快速失败，自动落到云端）
+    push('local-whisper');
+  } else {
+    push(config.asr.provider);
+  }
   push(config.asr.cloud.provider);
   for (const id of config.asr.cloud.fallbackOrder ?? []) push(id);
   return chain;
+}
+
+/** 该 provider 是否跑在 offscreen（调用前需要先确保 offscreen 文档存活） */
+export function isLocalAsrProvider(id: AsrProviderId): boolean {
+  return LOCAL_IDS.includes(id);
 }
 
 /** 是否至少有一个可用 provider（配置层面；不代表网络可用） */
